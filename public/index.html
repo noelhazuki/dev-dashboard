@@ -28,6 +28,10 @@ body {
 }
 h1 { font-size: 18px; font-weight: 900; color: var(--cyan); letter-spacing: .08em; margin-bottom: 4px; }
 .header-sub { font-size: 13px; color: var(--muted); margin-bottom: 24px; }
+.save-indicator { font-size: 12px; min-height: 16px; margin: -18px 0 18px; transition: color .2s; }
+.save-indicator.saving { color: var(--gold); }
+.save-indicator.saved  { color: var(--green); }
+.save-indicator.error  { color: #d88; }
 
 .top-stats { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
 .stat-chip { background: var(--panel); border: 1px solid var(--line2); border-radius: 10px; padding: 8px 14px; font-size: 13px; }
@@ -368,6 +372,7 @@ textarea:focus { border-color: var(--cyan); }
 
 <h1>AI とやってること</h1>
 <p class="header-sub" id="lastUpdated">読み込み中...</p>
+<p class="save-indicator" id="saveIndicator"></p>
 
 <div class="top-stats">
   <div class="stat-chip green"><span class="num" id="statActive">-</span>稼働中</div>
@@ -568,25 +573,28 @@ textarea:focus { border-color: var(--cyan); }
 </div>
 
 <script>
-const STORE_KEY = 'dev_dashboard_v2';
-const GATE_KEY  = 'dev_dashboard_gate';
-
-// ── 再開ゲート ────────────────────────────────────────────────
+// ── 再開ゲート（dataオブジェクトに統合・KV経由で永続化） ──────────
+function ensureGate() {
+  if (!data.gate) data.gate = { threshold: 2, lastActive: null };
+}
 function getGateThresholdHours() {
-  try { const v = localStorage.getItem(GATE_KEY + '_threshold'); return v ? parseFloat(v) : 2; } catch(e) { return 2; }
+  ensureGate();
+  return typeof data.gate.threshold === 'number' ? data.gate.threshold : 2;
 }
 function setGateThresholdHours(h) {
-  try { localStorage.setItem(GATE_KEY + '_threshold', String(h)); } catch(e) {}
+  ensureGate();
+  data.gate.threshold = h;
+  saveData(data);
 }
 function recordActivity() {
-  try { localStorage.setItem(GATE_KEY + '_lastActive', Date.now().toString()); } catch(e) {}
+  ensureGate();
+  data.gate.lastActive = Date.now();
+  saveData(data);
 }
 function shouldShowGate() {
-  try {
-    const last = parseInt(localStorage.getItem(GATE_KEY + '_lastActive') || '0', 10);
-    if (!last) return false;
-    return (Date.now() - last) / 1000 / 3600 >= getGateThresholdHours();
-  } catch(e) { return false; }
+  ensureGate();
+  if (!data.gate.lastActive) return false;
+  return (Date.now() - data.gate.lastActive) / 1000 / 3600 >= getGateThresholdHours();
 }
 function pickGateTasks() {
   // 緊急度が高い(urgent_important / important)もので、wip/activeのものだけ
@@ -648,100 +656,89 @@ function checkGateOnLoad() {
 }
 
 const DEFAULT_DATA = {
-  lastUpdated: '2026-06-14',
-  globalLogs: [
-    { date: '2026-06-14 00:00', note: 'ダッシュボード初回セットアップ' }
-  ],
-  items: [
-    { id:'myplanner', createdAt:'2026-06-14 00:01', type:'APP', tags:null, name:'マイプランナー', url:'myplanner.noel-hazuki.workers.dev', status:'wip', statusLabel:'作業中',
-      fileGroups:[{label:'Cloudflare Workers', files:['index.html']}],
-      currentWork:{ summary:'妖怪退治要素との合併・キャラクターセリフ実装・ソース整理', spec:null, touchingFiles:['index.html'] },
-      logs:[{ date:'2026-06-14 00:00', note:'妖怪退治要素と合併。キャラクターセリフ実装。ソース整理。' }] },
-
-    { id:'bookmarker', createdAt:'2026-06-14 00:02', type:'APP', tags:null, name:'ブックマーカー', url:'bookmarker.noel-hazuki.workers.dev', status:'active', statusLabel:'稼働中',
-      fileGroups:[{label:'Cloudflare Pages', files:['index.html','sw.js','manifest.json']}],
-      currentWork:null,
-      logs:[{ date:'2026-06-14 00:00', note:'上下入れ替え機能追加・ホーム画面構成変更。' }] },
-
-    { id:'memo', createdAt:'2026-06-14 00:03', type:'APP', tags:null, name:'メモアプリ', url:'ローカルPWA（ホーム画面追加）', status:'wip', statusLabel:'作業中',
-      fileGroups:[{label:'Cloudflare Workers', files:['index.html','manifest.json','palette.html','sw.js']},{label:'ローカル', files:['icon-192.png','icon-512.png']}],
-      currentWork:{ summary:'修正依頼したい箇所あり。palette.htmlと連動したノグチさんカラーテーマシステム。', spec:null, touchingFiles:['index.html','palette.html'] },
-      logs:[{ date:'2026-06-14 00:00', note:'ツリー構造・マルチテーマ・カスタムパレットインポート実装済み。修正箇所検討中。' }] },
-
-    { id:'pokeka', createdAt:'2026-06-14 00:04', type:'APP', tags:'ポケカ', name:'ポケカデッキ分析', url:'pokeka2（Cloudflare Workers）', status:'hold', statusLabel:'保留中',
-      fileGroups:[{label:'Cloudflare Workers (pokeka2)', files:['worker.js']}],
-      currentWork:{ summary:'カード画像表示の手段がなく止まっている。\nデッキコードをURLに付けると公式サイトからスクレイプしてカード一覧JSONを返す機能は完成。', spec:'使い方: https://<WorkerURL>/?code=デッキコード', touchingFiles:['worker.js'] },
-      logs:[{ date:'2026-06-14 00:00', note:'デッキコード→JSON出力は完成。画像表示の手段が見つからず保留。' }] },
-
-    { id:'keiba', createdAt:'2026-06-14 00:05', type:'APP', tags:'競馬', name:'競馬メモアプリ', url:'未統合・未デプロイ', status:'wip', statusLabel:'作業中',
-      fileGroups:[{label:'ローカル（未デプロイ）', files:['keiba-memo.jsx','course-combo-sample.html','stallion-db-sample.html']}],
-      currentWork:{ summary:'3パーツを別々に開発中。統合はまだ。\n①馬メモ機能（実装済み）②コースデータ描画（止まり中）③種牡馬DB（作成中）', spec:'ワークフロー: 馬名登録 → ホームで「情報待ち◯頭」コピー → Claudeに渡す → JSONを取り込みタブに貼る', touchingFiles:['course-combo-sample.html'] },
-      logs:[{ date:'2026-06-14 00:00', note:'馬メモ・コースサンプル・種牡馬DB を別々に作成中。統合前。' }] },
-
-    { id:'pokeka-price', createdAt:'2026-06-14 00:06', type:'APP', tags:'ポケカ', name:'ポケカ価格調査アプリ', url:'構想段階', status:'idea', statusLabel:'構想中',
-      fileGroups:[],
-      currentWork:{ summary:'Stage1: カードごとに既存価格サイト（みんなのポケカ相場等）へリンク\nStage2: データエンドポイントが見つかれば価格をアプリ内表示', spec:null, touchingFiles:[] },
-      logs:[{ date:'2026-06-14 00:00', note:'構想のみ。2段階アプローチを検討中。' }] },
-
-    { id:'gigalith-deck', createdAt:'2026-06-14 00:07', type:'DCK', tags:'ポケカ', name:'ポケカ ギガイアスデッキ調整', url:'', status:'wip', statusLabel:'作業中',
-      fileGroups:[],
-      currentWork:{ summary:'イワパレス×ギガイアス（格闘タイプ）デッキの最適化。\n先攻展開率86%まで到達。化石/ランパートex ラインを全カット、イワパレス4-4、ポケパッド4枚採用で確定。', spec:'モンテカルロシミュレーション確認済み。ボスの指令4枚に戻す決定。バルーン採用（緊急ボード不採用）。スタジアム2枚構成（バトルコロシアム＋フェスティバルグラウンド）。', touchingFiles:[] },
-      logs:[{ date:'2026-06-14 00:00', note:'先攻展開率86%達成。主要構成確定。プライズリスク管理フレームワーク（3・4・1・1・1チェック）策定。' }] },
-
-    { id:'essay', createdAt:'2026-06-14 00:08', type:'RES', tags:'競馬', name:'優駿エッセイ賞 応募作品', url:'', status:'wip', statusLabel:'作業中',
-      fileGroups:[{label:'ローカル', files:['優駿エッセイ賞_競馬場に行きたくて_v6-1.md']}],
-      currentWork:{ summary:'「競馬場に行きたくて」v6-1（約3,450字）。詰め作業中。', spec:null, touchingFiles:['優駿エッセイ賞_競馬場に行きたくて_v6-1.md'] },
-      logs:[{ date:'2026-06-14 00:00', note:'v6-1まで進行。詰め作業中。' }] },
-
-    { id:'story-archive', createdAt:'2026-06-14 00:09', type:'RES', tags:null, name:'あのストーリーなんだっけ', url:'', status:'wip', statusLabel:'作業中',
-      fileGroups:[{label:'ローカル', files:['story-archive.jsx']}],
-      currentWork:{ summary:'作品ごとのあらすじ・人物・要点をAIで整理して貯めるアプリ。設計モック（story-archive.jsx）まで完成。localStorage永続化と編集UIはまだ。', spec:null, touchingFiles:['story-archive.jsx'] },
-      logs:[{ date:'2026-06-14 00:00', note:'設計モック完成。Re:ゼロサンプルデータ入り。本実装はまだ。' }] },
-
-    { id:'handoff-template', createdAt:'2026-06-14 00:10', type:'ADM', tags:null, name:'セッション引き継ぎテンプレ', url:'', status:'wip', statusLabel:'作業中',
-      fileGroups:[],
-      currentWork:{ summary:'チャット終了時に次セッションへ渡すテンプレの整備。\n現行フォーマット:\n■今やってること\n■ここまでの経緯\n■次にやること\n■持ち越しの懸念・未解決事項', spec:null, touchingFiles:[] },
-      logs:[{ date:'2026-06-14 00:00', note:'現行フォーマット運用中。さらに詰められるか検討中。' }] },
-
-    { id:'claude-limits', createdAt:'2026-06-14 00:11', type:'APP', tags:null, name:'Claudeでできること 説明HTML', url:'claude-limits（Cloudflare Workers）', status:'active', statusLabel:'稼働中',
-      fileGroups:[{label:'Cloudflare Workers', files:['index.html']}],
-      currentWork:null,
-      logs:[{ date:'2026-06-14 00:00', note:'CH.5 に知識カットオフの説明追加済み。' }] },
-
-    { id:'dashboard', createdAt:'2026-06-14 00:12', type:'ADM', tags:null, name:'このダッシュボード', url:'ローカルHTML', status:'wip', statusLabel:'作業中',
-      fileGroups:[{label:'ローカル', files:['dashboard.html']}],
-      currentWork:{ summary:'AIとやってること全体を管理するダッシュボード。JSONインポートで進捗更新。', spec:null, touchingFiles:['dashboard.html'] },
-      logs:[{ date:'2026-06-14 00:00', note:'初版作成。各種機能追加中。' }] },
-
-    { id:'coconala', createdAt:'2026-06-14 00:13', type:'RES', tags:'生活', name:'主婦の在宅ワーク（ココナラ）', url:'', status:'idea', statusLabel:'検討中',
-      fileGroups:[],
-      currentWork:{ summary:'ococナラに登録してパソコン出してくる段階から始める予定。', spec:null, touchingFiles:[] },
-      logs:[{ date:'2026-06-14 00:00', note:'検討開始。' }] }
-  ]
+  lastUpdated: null,
+  globalLogs: [],
+  items: [],
+  gate: { threshold: 2, lastActive: null }
 };
 
-// ── データ管理 ────────────────────────────────────────────────
-function loadData() {
-  try {
-    const raw = localStorage.getItem(STORE_KEY);
-    if (!raw) return DEFAULT_DATA;
-    const d = JSON.parse(raw);
-    if (!d.globalLogs) d.globalLogs = [];
-    d.items.forEach((item, i) => {
-      if (!item.createdAt) item.createdAt = '2026-06-14 00:' + String(i).padStart(2,'0');
-      else if (item.createdAt.length === 10) item.createdAt += ' 00:00';
-      if (!item.fileGroups) item.fileGroups = item.files && item.files.length ? [{label:'ファイル', files: item.files}] : [];
-      // ログの日付も正規化
-      if (item.logs) item.logs.forEach(l => { if (l.date && l.date.length === 10) l.date += ' 00:00'; });
-      // lastTouchedも正規化
-      if (item.lastTouched && item.lastTouched.length === 10) item.lastTouched += ' 00:00';
-    });
-    return d;
-  } catch(e) { return DEFAULT_DATA; }
+// ── データ管理（Cloudflare KV経由） ──────────────────────────
+function normalizeData(d) {
+  if (!d || typeof d !== 'object' || Array.isArray(d)) {
+    return JSON.parse(JSON.stringify(DEFAULT_DATA));
+  }
+  if (!d.globalLogs) d.globalLogs = [];
+  if (!d.items) d.items = [];
+  if (!d.gate) d.gate = { threshold: 2, lastActive: null };
+  d.items.forEach((item, i) => {
+    if (!item.createdAt) item.createdAt = '2026-06-14 00:' + String(i).padStart(2,'0');
+    else if (item.createdAt.length === 10) item.createdAt += ' 00:00';
+    if (!item.fileGroups) item.fileGroups = item.files && item.files.length ? [{label:'ファイル', files: item.files}] : [];
+    // ログの日付も正規化
+    if (item.logs) item.logs.forEach(l => { if (l.date && l.date.length === 10) l.date += ' 00:00'; });
+    // lastTouchedも正規化
+    if (item.lastTouched && item.lastTouched.length === 10) item.lastTouched += ' 00:00';
+  });
+  return d;
 }
-function saveData(d) { try { localStorage.setItem(STORE_KEY, JSON.stringify(d)); recordActivity(); } catch(e) {} }
 
-let data = loadData();
+async function loadDataFromApi() {
+  try {
+    const res = await fetch('/api/load');
+    if (!res.ok) throw new Error('load failed: ' + res.status);
+    const raw = await res.text();
+    if (!raw) return normalizeData(null);
+    const parsed = JSON.parse(raw);
+    // KVが空の場合、Worker側は"[]"（空配列）を返す仕様 → 未保存状態として扱う
+    if (Array.isArray(parsed)) return normalizeData(null);
+    return normalizeData(parsed);
+  } catch (e) {
+    setSaveIndicator('error');
+    return normalizeData(null);
+  }
+}
+
+let saveTimer = null;
+function setSaveIndicator(state) {
+  const el = document.getElementById('saveIndicator');
+  if (!el) return;
+  el.classList.remove('saving', 'saved', 'error');
+  if (state === 'saving') {
+    el.textContent = '保存中…';
+    el.classList.add('saving');
+  } else if (state === 'saved') {
+    el.textContent = '保存済み ✓';
+    el.classList.add('saved');
+    setTimeout(() => { if (el.textContent === '保存済み ✓') el.textContent = ''; }, 2000);
+  } else if (state === 'error') {
+    el.textContent = '保存失敗 ⚠ 通信を確認して';
+    el.classList.add('error');
+  } else {
+    el.textContent = '';
+  }
+}
+function saveData(d) {
+  // 保存=活動とみなし、ゲートの最終活動時刻もここで更新する
+  if (!d.gate) d.gate = { threshold: 2, lastActive: null };
+  d.gate.lastActive = Date.now();
+
+  setSaveIndicator('saving');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    fetch('/api/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(d)
+    }).then(res => {
+      if (!res.ok) throw new Error('save failed: ' + res.status);
+      setSaveIndicator('saved');
+    }).catch(() => {
+      setSaveIndicator('error');
+    });
+  }, 400); // KVの1秒1回書き込み制限対策のデバウンス
+}
+
+let data = JSON.parse(JSON.stringify(DEFAULT_DATA));
 let activeTab = '__recent__';
 
 // ── ユーティリティ ────────────────────────────────────────────
@@ -807,7 +804,7 @@ function find(appId) {
 
 // ── 描画 ──────────────────────────────────────────────────────
 function render() {
-  document.getElementById('lastUpdated').textContent = '最終更新: ' + data.lastUpdated;
+  document.getElementById('lastUpdated').textContent = data.lastUpdated ? ('最終更新: ' + data.lastUpdated) : 'データ読み込み済み（まだ更新なし）';
 
   const active = data.items.filter(a => a.status === 'active').length;
   const wip    = data.items.filter(a => a.status === 'wip').length;
@@ -865,7 +862,7 @@ function buildManageTab() {
 
   <div class="import-section" style="margin-top:12px">
     <div class="import-title">💾 データをエクスポート</div>
-    <div class="import-sub">localStorageのデータをJSONファイルとしてダウンロード。バックアップ用。</div>
+    <div class="import-sub">今のデータをJSONファイルとしてダウンロード。バックアップ用。</div>
     <button class="btn btn-add" style="margin-top:0" onclick="doExport()">💾 JSONをダウンロード</button>
   </div>
 
@@ -879,7 +876,7 @@ function buildManageTab() {
 
   <div class="import-section" style="margin-top:12px;border-color:#553333">
     <div class="import-title" style="color:var(--pink)">⚠ データ管理</div>
-    <div class="import-sub">localStorageのデータをリセットして初期状態に戻す。操作ログ・追加したアイテムは全て消える。</div>
+    <div class="import-sub">データをリセットして初期状態に戻す。操作ログ・追加したアイテムは全て消える。</div>
     <button class="btn" style="background:#2a1a1a;border-color:var(--pink);color:var(--pink);margin-top:0" onclick="resetData()">🗑 データをリセット（初期状態に戻す）</button>
   </div>
 
@@ -1340,9 +1337,9 @@ function handleRestoreFile(inputEl) {
       return;
     }
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(parsed));
-      data = loadData();
+      data = normalizeData(parsed);
       activeTab = '__recent__';
+      saveData(data);
       render();
       const resultEl2 = document.getElementById('restoreResult');
       if (resultEl2) {
@@ -1780,10 +1777,10 @@ function doDelete() {
 }
 
 function resetData() {
-  if (confirm('localStorageのデータを全てリセットして初期状態に戻します。よろしいですか？')) {
-    localStorage.removeItem('dev_dashboard_v2');
-    data = loadData();
+  if (confirm('データを全てリセットして初期状態に戻します。よろしいですか？')) {
+    data = normalizeData(null);
     activeTab = '__recent__';
+    saveData(data);
     render();
     showToast('リセットしました');
   }
@@ -1807,8 +1804,12 @@ function updateGateThresholdDisplay() {
 }
 function updateReqSelect() {}
 
-render();
-checkGateOnLoad();
+async function init() {
+  data = await loadDataFromApi();
+  render();
+  checkGateOnLoad();
+}
+init();
 </script>
 </body>
 </html>
