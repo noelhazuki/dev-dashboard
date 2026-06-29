@@ -1,0 +1,1814 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIとやってること</title>
+<style>
+:root {
+  --bg: #111314;
+  --panel: #1e2124;
+  --panel2: #252a2d;
+  --line: #2e3336;
+  --line2: #3a4044;
+  --ink: #d8dde0;
+  --muted: #6b7478;
+  --green: #6abf8a;
+  --cyan: #7ab8c0;
+  --purple: #9a86b8;
+  --gold: #b8a060;
+  --blue: #7098b8;
+  --pink: #b87a8a;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: 'Hiragino Sans','Noto Sans JP',system-ui,sans-serif;
+  min-height: 100vh; padding: 20px 16px 80px; font-size: 16px; line-height: 1.7;
+}
+h1 { font-size: 18px; font-weight: 900; color: var(--cyan); letter-spacing: .08em; margin-bottom: 4px; }
+.header-sub { font-size: 13px; color: var(--muted); margin-bottom: 24px; }
+
+.top-stats { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+.stat-chip { background: var(--panel); border: 1px solid var(--line2); border-radius: 10px; padding: 8px 14px; font-size: 13px; }
+.stat-chip .num { font-size: 20px; font-weight: 900; display: block; line-height: 1.2; }
+.stat-chip.green .num { color: var(--green); }
+.stat-chip.gold .num { color: var(--gold); }
+.stat-chip.muted .num { color: var(--muted); }
+
+.tab-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.tab-btn {
+  background: var(--panel); border: 1px solid var(--line2); border-radius: 10px;
+  color: var(--muted); font-family: inherit; font-size: 14px; font-weight: 700;
+  padding: 8px 14px; cursor: pointer; white-space: nowrap;
+}
+.tab-btn:hover { border-color: var(--cyan); color: var(--ink); }
+.tab-btn.active { background: var(--panel2); border-color: var(--cyan); color: var(--cyan); }
+.tab-badge { display: inline-block; font-size: 11px; background: var(--panel2); border-radius: 20px; padding: 0 6px; margin-left: 4px; color: var(--muted); }
+.tab-btn.active .tab-badge { color: var(--cyan); }
+
+.card {
+  background: var(--panel); border: 1px solid var(--line2); border-radius: 14px;
+  padding: 16px; margin-bottom: 12px; position: relative; overflow: hidden;
+}
+.card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; border-radius: 3px 0 0 3px; }
+.card.status-active::before { background: var(--green); }
+.card.status-wip::before    { background: var(--gold); }
+.card.status-hold::before   { background: var(--muted); }
+.card.status-idea::before   { background: var(--purple); }
+.card.status-cancel::before { background: #444; }
+.card.status-merged::before { background: #556; }
+.card.status-cancel { opacity: 0.45; filter: grayscale(0.6); }
+.card.status-merged { opacity: 0.5; filter: grayscale(0.4); }
+
+.card-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+.card-name { font-size: 17px; font-weight: 900; flex: 1; line-height: 1.4; }
+.card-id { font-size: 11px; font-weight: 500; color: var(--muted); font-family: monospace; display: block; margin-top: 2px; }
+.card-badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.status-badge { font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; }
+.status-active .status-badge { background: rgba(106,191,138,.12); border: 1px solid var(--green); color: var(--green); }
+.status-wip    .status-badge { background: rgba(184,160, 96,.12); border: 1px solid var(--gold);   color: var(--gold); }
+.status-hold   .status-badge { background: rgba(107,116,120,.15); border: 1px solid var(--muted);  color: var(--muted); }
+.status-idea   .status-badge { background: rgba(154,134,184,.12); border: 1px solid var(--purple); color: var(--purple); }
+.status-cancel .status-badge { background: rgba(80,80,80,.2);     border: 1px solid #666;          color: #888; }
+.status-merged .status-badge { background: rgba(80,90,120,.2);    border: 1px solid #668;          color: #99a; }
+
+.prio-badge { font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; }
+.prio-badge.prio-red    { background: rgba(200,90,90,.14);  border: 1px solid #c85a5a; color: #d88; }
+.prio-badge.prio-yellow { background: rgba(200,170,80,.14); border: 1px solid #c8aa50; color: #cb4; }
+.prio-badge.prio-green  { background: rgba(106,191,138,.12);border: 1px solid var(--green); color: var(--green); }
+.prio-badge.prio-blue   { background: rgba(112,152,184,.14);border: 1px solid var(--blue); color: #8ab; }
+
+.type-badge { font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; background: rgba(122,184,192,.12); border: 1px solid var(--cyan); color: var(--cyan); }
+.tag-badge  { font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; background: rgba(154,134,184,.12); border: 1px solid var(--purple); color: var(--purple); }
+
+.prio-section-head { display: flex; align-items: center; gap: 8px; margin: 22px 0 8px; }
+.prio-section-head:first-child { margin-top: 4px; }
+.prio-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+.prio-dot.prio-red { background: #c85a5a; } .prio-dot.prio-yellow { background: #c8aa50; }
+.prio-dot.prio-green { background: var(--green); } .prio-dot.prio-blue { background: var(--blue); }
+.prio-dot.prio-none { background: var(--muted); }
+.prio-section-title { font-size: 14px; font-weight: 900; color: var(--ink); }
+.prio-section-count { font-size: 12px; color: var(--muted); }
+.prio-empty { font-size: 13px; color: var(--muted); padding: 4px 0 4px 20px; }
+
+/* ▦一覧タブ（優先度2x2マトリクス） */
+.matrix-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.matrix-cell {
+  background: var(--panel); border: 1px solid var(--line2); border-radius: 14px;
+  padding: 12px; min-height: 90px;
+}
+.matrix-cell.matrix-red    { border-color: #c85a5a; }
+.matrix-cell.matrix-yellow { border-color: #c8aa50; }
+.matrix-cell.matrix-green  { border-color: var(--green); }
+.matrix-cell.matrix-blue   { border-color: var(--blue); }
+.matrix-cell-head { display: flex; align-items: baseline; gap: 6px; margin-bottom: 8px; }
+.matrix-cell-title { font-size: 13px; font-weight: 900; }
+.matrix-red    .matrix-cell-title { color: #d88; }
+.matrix-yellow .matrix-cell-title { color: #cb4; }
+.matrix-green  .matrix-cell-title { color: var(--green); }
+.matrix-blue   .matrix-cell-title { color: #8ab; }
+.matrix-cell-count { font-size: 11px; color: var(--muted); }
+.matrix-item-list { display: flex; flex-direction: column; gap: 4px; }
+.matrix-item-btn {
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+  color: var(--ink); font-family: inherit; font-size: 13px; text-align: left;
+  padding: 7px 10px; cursor: pointer; line-height: 1.4;
+}
+.matrix-item-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+.matrix-cell-empty { font-size: 12px; color: var(--muted); padding: 4px 0; }
+.matrix-none-section { margin-top: 4px; }
+.matrix-none-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.matrix-none-title { font-size: 13px; font-weight: 900; color: var(--muted); }
+.card-jump-flash { animation: cardJumpFlash 1.4s ease; }
+@keyframes cardJumpFlash {
+  0%   { box-shadow: 0 0 0 2px var(--cyan); }
+  100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); }
+}
+
+.card-edit-btn {
+  background: none; border: 1px solid var(--line2); border-radius: 7px;
+  color: var(--muted); font-size: 12px; padding: 3px 10px; cursor: pointer;
+  font-family: inherit; flex-shrink: 0;
+}
+.card-edit-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+
+.card-url { font-size: 13px; color: var(--blue); margin-bottom: 10px; word-break: break-all; }
+.card-url a { color: inherit; text-decoration: none; }
+.card-url a:hover { text-decoration: underline; }
+.merged-into { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.merged-into span { color: var(--blue); }
+
+.sec-label { font-size: 11px; font-weight: 800; color: var(--muted); letter-spacing: .1em; margin: 10px 0 5px; }
+.file-group-label { font-size: 11px; color: var(--blue); font-weight: 700; margin: 6px 0 3px; }
+.file-list { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+.file-tag { font-size: 12px; background: var(--panel2); border: 1px solid var(--line2); border-radius: 6px; padding: 2px 10px; color: var(--muted); font-family: 'Courier New',monospace; }
+
+.current-work { background: rgba(112,152,184,.06); border: 1px solid rgba(112,152,184,.22); border-radius: 10px; padding: 10px 12px; margin-top: 8px; }
+.current-work-title { font-size: 11px; font-weight: 800; color: var(--blue); letter-spacing: .08em; margin-bottom: 5px; }
+.current-work-body { font-size: 14px; color: #b8b4cc; line-height: 1.75; }
+.work-file { font-size: 13px; color: var(--cyan); font-family: 'Courier New',monospace; display: inline-block; margin-right: 8px; }
+
+.log-entry { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); align-items: flex-start; font-size: 14px; }
+.log-entry:last-child { border-bottom: none; }
+.log-date { font-size: 11px; color: var(--muted); white-space: nowrap; flex-shrink: 0; margin-top: 2px; }
+.log-text { color: #b8b4cc; }
+.log-scroll { max-height: 168px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line2) transparent; }
+.log-scroll::-webkit-scrollbar { width: 4px; }
+.log-scroll::-webkit-scrollbar-track { background: transparent; }
+.log-scroll::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 4px; }
+.card-log-note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; cursor: pointer; }
+.card-log-note.expanded { white-space: pre-wrap; overflow: visible; text-overflow: unset; }
+.log-entry.card-log { cursor: pointer; }
+.log-entry.card-log:hover .card-log-note { color: var(--ink); }
+/* 作業内容折りたたみ */
+.cw-collapsible { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; position: relative; }
+.cw-collapsible.expanded { display: block; -webkit-line-clamp: unset; white-space: pre-wrap; }
+.cw-toggle-btn { text-align: center; font-size: 12px; color: var(--muted); padding: 3px 0; cursor: pointer; letter-spacing: .05em; }
+.cw-toggle-btn:hover { color: var(--cyan); }
+.cw-wrap { }
+
+.section-divider { height: 1px; background: var(--line); margin: 28px 0; }
+
+.import-section { background: var(--panel); border: 1px solid var(--line2); border-radius: 14px; padding: 16px; margin-top: 12px; }
+.import-title { font-size: 15px; font-weight: 900; color: var(--cyan); margin-bottom: 5px; }
+.import-sub { font-size: 13px; color: var(--muted); margin-bottom: 12px; line-height: 1.7; }
+textarea { width: 100%; background: var(--bg); border: 1px solid var(--line2); border-radius: 8px; color: var(--ink); font-family: 'Courier New',monospace; font-size: 13px; padding: 12px; resize: vertical; min-height: 130px; outline: none; }
+textarea:focus { border-color: var(--cyan); }
+.btn { border-radius: 10px; padding: 11px 20px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit; margin-top: 10px; width: 100%; border: 1px solid; }
+.btn-import { background: #1e2e28; border-color: var(--green); color: var(--green); }
+.btn-copy   { background: #221e2e; border-color: var(--purple); color: var(--purple); }
+.btn-add    { background: #1e2028; border-color: var(--blue); color: var(--blue); }
+.btn:hover  { filter: brightness(1.15); }
+
+.import-result { font-size: 13px; margin-top: 10px; padding: 8px 12px; border-radius: 8px; display: none; }
+.import-result.ok  { background: rgba(106,191,138,.1); border: 1px solid var(--green); color: var(--green); }
+.import-result.err { background: rgba(184,122,138,.08); border: 1px solid var(--pink); color: var(--pink); }
+
+.prompt-section { background: var(--panel); border: 1px solid var(--line2); border-radius: 14px; padding: 16px; margin-top: 12px; }
+.prompt-title { font-size: 15px; font-weight: 900; color: var(--purple); margin-bottom: 5px; }
+.prompt-sub { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+.prompt-preview { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px; font-size: 12px; color: var(--muted); margin-top: 10px; white-space: pre-wrap; word-break: break-all; line-height: 1.7; display: none; }
+.preview-copy-btn { background: var(--panel2); border: 1px solid var(--line2); border-radius: 8px; color: var(--muted); font-family: inherit; font-size: 13px; font-weight: 700; padding: 6px 14px; cursor: pointer; margin-top: 6px; width: 100%; }
+.preview-copy-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+
+.form-grid { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.form-row { display: flex; flex-direction: column; gap: 4px; }
+.form-label { font-size: 12px; color: var(--muted); font-weight: 700; }
+.form-input, .form-select {
+  width: 100%; background: var(--bg); border: 1px solid var(--line2); border-radius: 8px;
+  color: var(--ink); font-family: inherit; font-size: 15px; padding: 9px 12px; outline: none; appearance: none;
+}
+.form-input:focus, .form-select:focus { border-color: var(--cyan); }
+
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 1000; display: none; overflow-y: auto; padding: 20px 16px 60px; }
+.modal-overlay.open { display: block; }
+.modal-box { background: var(--panel); border: 1px solid var(--line2); border-radius: 16px; padding: 18px; max-width: 540px; margin: 0 auto; }
+.modal-title { font-size: 16px; font-weight: 900; color: var(--cyan); margin-bottom: 16px; }
+.modal-field { margin-bottom: 12px; }
+.modal-label { font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 4px; display: block; }
+.modal-input, .modal-select {
+  width: 100%; background: var(--bg); border: 1px solid var(--line2); border-radius: 8px;
+  color: var(--ink); font-family: inherit; font-size: 15px; padding: 9px 12px; outline: none; appearance: none;
+}
+.modal-input:focus, .modal-select:focus { border-color: var(--cyan); }
+.modal-textarea { width: 100%; background: var(--bg); border: 1px solid var(--line2); border-radius: 8px; color: var(--ink); font-family: inherit; font-size: 14px; padding: 9px 12px; outline: none; resize: vertical; min-height: 80px; line-height: 1.6; }
+.modal-textarea:focus { border-color: var(--cyan); }
+.modal-btns { display: flex; gap: 8px; margin-top: 16px; }
+.modal-save { flex: 1; background: #1e2e28; border: 1px solid var(--green); color: var(--green); border-radius: 10px; padding: 11px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit; }
+.modal-save:hover { filter: brightness(1.15); }
+.modal-cancel { background: var(--panel2); border: 1px solid var(--line2); color: var(--muted); border-radius: 10px; padding: 11px 18px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit; }
+.modal-cancel:hover { border-color: var(--muted); color: var(--ink); }
+
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--green); color: var(--green); border-radius: 10px; padding: 10px 20px; font-size: 14px; font-weight: 700; z-index: 9999; display: none; white-space: nowrap; }
+
+/* ── 再開ゲート（門） ── */
+:root { --gate-neon: #ff3b5c; --gate-neon-soft: rgba(255,59,92,.55); }
+#resumeGate {
+  position: fixed; inset: 0; z-index: 10000;
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(255,59,92,.10), transparent 60%),
+    #0a0c0d;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: flex-start;
+  padding: 0 0 40px; overflow-y: auto;
+}
+
+/* 門の梁（笠木） */
+.gate-roof {
+  width: 100%; max-width: 540px; position: relative;
+  margin: 0 auto 4px; padding: 0 12px;
+}
+.gate-roof-beam {
+  height: 26px; margin: 0 -4px;
+  background: linear-gradient(180deg, #1a1d1f 0%, #121416 100%);
+  border: 1.5px solid var(--gate-neon);
+  border-radius: 6px 6px 2px 2px;
+  box-shadow: 0 0 12px var(--gate-neon-soft), inset 0 0 8px rgba(255,59,92,.2);
+  position: relative;
+}
+.gate-roof-beam::before {
+  content: ''; position: absolute; left: 18%; right: 18%; top: -7px; height: 7px;
+  background: #121416; border: 1.5px solid var(--gate-neon); border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  box-shadow: 0 0 10px var(--gate-neon-soft);
+}
+.gate-roof-beam2 {
+  height: 12px; margin: 4px 14px 0;
+  background: #121416; border: 1.5px solid var(--gate-neon-soft);
+  border-radius: 4px; box-shadow: 0 0 8px rgba(255,59,92,.3);
+}
+
+/* 門の中の本体（柱で挟む） */
+.gate-inner {
+  width: 100%; max-width: 540px; margin: 0 auto;
+  border-left: 2.5px solid var(--gate-neon);
+  border-right: 2.5px solid var(--gate-neon);
+  box-shadow: inset 14px 0 24px -18px var(--gate-neon), inset -14px 0 24px -18px var(--gate-neon);
+  padding: 28px 22px 8px;
+  min-height: calc(100vh - 60px);
+  display: flex; flex-direction: column; align-items: center;
+}
+
+.gate-label {
+  font-size: 12px; font-weight: 600; letter-spacing: .35em; color: var(--gate-neon);
+  margin-bottom: 6px; text-shadow: 0 0 8px var(--gate-neon-soft);
+}
+.gate-headline { font-size: 21px; font-weight: 700; color: var(--ink); margin-bottom: 30px; text-align: center; line-height: 1.4; }
+.gate-tasks { width: 100%; display: flex; flex-direction: column; gap: 16px; margin-bottom: 26px; }
+
+/* タスク＝改札機 */
+.gate-task-btn {
+  position: relative; overflow: hidden;
+  background: linear-gradient(180deg, #181b1d, #131517);
+  border: 2px solid var(--line2); border-radius: 14px;
+  color: var(--ink); font-family: inherit; cursor: pointer; text-align: left;
+  padding: 20px 22px; display: flex; flex-direction: column; gap: 10px;
+  transition: transform .1s, border-color .15s;
+}
+.gate-task-btn::after {
+  content: '通過 ▶'; position: absolute; right: 16px; bottom: 14px;
+  font-size: 11px; font-weight: 700; letter-spacing: .1em;
+  color: var(--gate-neon); opacity: .6;
+}
+.gate-task-btn:active { transform: scale(.98); border-color: var(--gate-neon); }
+.gate-task-head { display: flex; align-items: center; gap: 8px; }
+.gate-prio-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.gate-prio-dot.prio-red { background: #d88; }
+.gate-prio-dot.prio-yellow { background: #cb4; }
+.gate-prio-dot.prio-green { background: var(--green); }
+.gate-prio-dot.prio-blue { background: var(--blue); }
+.gate-task-app { font-size: 12px; color: var(--cyan); font-weight: 500; letter-spacing: .06em; }
+.gate-task-next { font-size: 19px; font-weight: 700; color: var(--ink); line-height: 1.45; padding-right: 50px; }
+.gate-task-undef .gate-task-next { color: var(--muted); font-weight: 400; font-style: italic; }
+
+/* 扉が開く演出 */
+.gate-doors {
+  position: fixed; inset: 0; z-index: 10001; display: none; pointer-events: none;
+  opacity: 0; transition: opacity .15s ease-out;
+}
+.gate-doors.show { display: block; opacity: 1; }
+.gate-door {
+  position: absolute; top: 0; bottom: 0; width: 50%;
+  background: linear-gradient(180deg, #1a1d1f, #0f1113);
+  box-shadow: 0 0 30px rgba(0,0,0,.6);
+  transform: translateX(0);
+}
+.gate-door.left  { left: 0;  border-right: 2.5px solid var(--gate-neon); }
+.gate-door.right { right: 0; border-left: 2.5px solid var(--gate-neon); }
+.gate-doors.open .gate-door.left  { animation: doorOpenL .5s ease-in forwards; }
+.gate-doors.open .gate-door.right { animation: doorOpenR .5s ease-in forwards; }
+@keyframes doorOpenL { to { transform: translateX(-100%); } }
+@keyframes doorOpenR { to { transform: translateX(100%); } }
+
+.gate-skip { background: none; border: none; color: var(--muted); font-family: inherit; font-size: 13px; font-weight: 400; cursor: pointer; padding: 8px 16px; text-decoration: underline; }
+.gate-skip:active { color: var(--ink); }
+
+/* フォルダ選択モーダル */
+.folder-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 2000; display: none; overflow-y: auto; padding: 16px 12px 60px; }
+.folder-modal-overlay.open { display: block; }
+
+/* 更新ログ全件モーダル */
+.log-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 2000; display: none; overflow-y: auto; padding: 16px 12px 60px; }
+.log-modal-overlay.open { display: block; }
+.log-modal-box { background: var(--panel); border: 1px solid var(--line2); border-radius: 16px; padding: 16px; max-width: 540px; margin: 0 auto; }
+.log-modal-title { font-size: 15px; font-weight: 900; color: var(--cyan); margin-bottom: 2px; }
+.log-modal-id { font-size: 11px; font-family: monospace; color: var(--muted); margin-bottom: 14px; }
+.log-modal-list { display: flex; flex-direction: column; gap: 10px; max-height: 70vh; overflow-y: auto; }
+.log-modal-close { width: 100%; margin-top: 14px; padding: 12px; border-radius: 10px; border: none; background: var(--line2); color: var(--ink); font-family: inherit; font-size: 14px; font-weight: 700; }
+.log-more-btn { display: block; width: 100%; text-align: center; font-size: 12px; color: var(--cyan); background: none; border: none; font-family: inherit; padding: 8px 0 2px; cursor: pointer; }
+.folder-modal-box { background: var(--panel); border: 1px solid var(--line2); border-radius: 16px; padding: 16px; max-width: 540px; margin: 0 auto; }
+.folder-modal-title { font-size: 15px; font-weight: 900; color: var(--cyan); margin-bottom: 4px; }
+.folder-modal-sub { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+.folder-drop-zone { border: 2px dashed var(--line2); border-radius: 10px; padding: 24px 16px; text-align: center; cursor: pointer; position: relative; margin-bottom: 12px; transition: border-color .2s; }
+.folder-drop-zone:hover { border-color: var(--cyan); }
+.folder-drop-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.folder-drop-label { font-size: 14px; color: var(--muted); }
+.folder-drop-label span { color: var(--cyan); font-weight: 700; }
+.folder-ctrl-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.folder-ctrl-btn { background: var(--panel2); border: 1px solid var(--line2); border-radius: 7px; color: var(--muted); font-family: inherit; font-size: 12px; padding: 5px 12px; cursor: pointer; }
+.folder-ctrl-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+.folder-tree-box { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; max-height: 45vh; overflow-y: auto; font-family: 'Courier New',monospace; font-size: 13px; line-height: 1.9; margin-bottom: 10px; scrollbar-width: thin; scrollbar-color: var(--line2) transparent; }
+.folder-tree-box::-webkit-scrollbar { width: 4px; } .folder-tree-box::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 4px; }
+.ft-folder { color: var(--cyan); cursor: pointer; display: block; white-space: pre; }
+.ft-folder:hover { color: var(--ink); }
+.ft-file-row { display: flex; align-items: center; gap: 6px; }
+.ft-file-label { color: var(--muted); font-size: 13px; cursor: pointer; flex: 1; font-family: 'Courier New',monospace; white-space: pre; }
+.ft-file-label.checked { color: var(--ink); }
+.ft-cb { accent-color: var(--cyan); width: 15px; height: 15px; cursor: pointer; flex-shrink: 0; }
+.folder-modal-btns { display: flex; gap: 8px; margin-top: 12px; }
+.folder-apply-btn { flex: 1; background: #1e2e28; border: 1px solid var(--green); color: var(--green); border-radius: 10px; padding: 11px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit; }
+.folder-apply-btn:hover { filter: brightness(1.15); }
+.folder-cancel-btn { background: var(--panel2); border: 1px solid var(--line2); color: var(--muted); border-radius: 10px; padding: 11px 16px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit; }
+.folder-cancel-btn:hover { border-color: var(--muted); color: var(--ink); }
+.folder-stats { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<h1>AI とやってること</h1>
+<p class="header-sub" id="lastUpdated">読み込み中...</p>
+
+<div class="top-stats">
+  <div class="stat-chip green"><span class="num" id="statActive">-</span>稼働中</div>
+  <div class="stat-chip gold"><span class="num" id="statWip">-</span>作業中</div>
+  <div class="stat-chip muted"><span class="num" id="statHold">-</span>保留/構想</div>
+</div>
+
+<div class="tab-bar" id="tabBar"></div>
+<div id="cardList"></div>
+
+<!-- 編集モーダル -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal-box">
+    <div class="modal-title">✏️ 編集</div>
+    <input type="hidden" id="editId">
+    <div class="modal-field">
+      <label class="modal-label">名前</label>
+      <input class="modal-input" id="editName" type="text">
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">種類</label>
+      <select class="modal-select" id="editType">
+        <option value="APP">APP（完成物・アプリ）</option>
+        <option value="RES">RES（研究・考察・相談）</option>
+        <option value="DCK">DCK（デッキ単体）</option>
+        <option value="ADM">ADM（運営・事務）</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">タグ</label>
+      <select class="modal-select" id="editTags">
+        <option value="">未設定</option>
+        <option value="ポケカ">ポケカ</option>
+        <option value="競馬">競馬</option>
+        <option value="生活">生活</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">ステータス</label>
+      <select class="modal-select" id="editStatus" onchange="toggleMergedField(this.value)">
+        <option value="wip">作業中</option>
+        <option value="active">稼働中</option>
+        <option value="hold">保留中</option>
+        <option value="idea">構想中</option>
+        <option value="cancel">中止</option>
+        <option value="merged">統合済み</option>
+      </select>
+    </div>
+    <div class="modal-field" id="mergedIntoField" style="display:none">
+      <label class="modal-label">統合先</label>
+      <input class="modal-input" id="editMergedInto" type="text" placeholder="例：マイプランナー">
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">緊急度</label>
+      <select class="modal-select" id="editPriority">
+        <option value="">未設定</option>
+        <option value="urgent_important">🔴 今すぐ（緊急かつ重要）</option>
+        <option value="important">🟡 計画的に（緊急でないが重要）</option>
+        <option value="urgent">🟢 サッと（緊急だけど重要でない）</option>
+        <option value="neither">🔵 後回し（緊急でも重要でもない）</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">URL / デプロイ先</label>
+      <input class="modal-input" id="editUrl" type="text">
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">ファイル構成（デプロイ先ごと）</label>
+      <div id="editFileGroups"></div>
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+        <button type="button" onclick="addFileGroup()" style="background:var(--panel2);border:1px solid var(--line2);border-radius:7px;color:var(--muted);font-size:12px;padding:5px 12px;cursor:pointer;font-family:inherit;">＋ グループ追加</button>
+        <button type="button" onclick="openFolderModal()" style="background:var(--panel2);border:1px solid var(--cyan);border-radius:7px;color:var(--cyan);font-size:12px;padding:5px 12px;cursor:pointer;font-family:inherit;">📂 フォルダから読み込む</button>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">現在の作業内容</label>
+      <textarea class="modal-textarea" id="editSummary"></textarea>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">仕様メモ</label>
+      <textarea class="modal-textarea" id="editSpec"></textarea>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">触ってるファイル（カンマ区切り）</label>
+      <input class="modal-input" id="editTouching" type="text">
+    </div>
+    <div class="modal-btns">
+      <button class="modal-save" onclick="saveEdit()">💾 保存</button>
+      <button class="modal-cancel" onclick="closeEdit()">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- 未登録IDモーダル -->
+<div class="modal-overlay" id="unknownModal">
+  <div class="modal-box" style="max-width:380px">
+    <div class="modal-title" style="color:var(--gold)">⚠ 未登録のID</div>
+    <p style="font-size:14px;color:var(--muted);margin-bottom:8px">このIDはダッシュボードに存在しません：</p>
+    <p style="font-size:16px;font-weight:900;color:var(--ink);margin-bottom:16px" id="unknownIdText"></p>
+    <p style="font-size:14px;color:var(--muted);margin-bottom:12px">新しいアイテムとして登録してから反映します。</p>
+    <div class="modal-field">
+      <label class="modal-label">表示名</label>
+      <input class="modal-input" id="unknownNameInput" type="text">
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">種類</label>
+      <select class="modal-select" id="unknownTypeSelect">
+        <option value="APP" selected>APP（完成物・アプリ）</option>
+        <option value="RES">RES（研究・考察・相談）</option>
+        <option value="DCK">DCK（デッキ単体）</option>
+        <option value="ADM">ADM（運営・事務）</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">タグ</label>
+      <select class="modal-select" id="unknownTagsSelect">
+        <option value="" selected>未設定</option>
+        <option value="ポケカ">ポケカ</option>
+        <option value="競馬">競馬</option>
+        <option value="生活">生活</option>
+      </select>
+    </div>
+    <div class="modal-btns">
+      <button class="modal-save" onclick="doRegisterUnknown()">➕ 登録して反映</button>
+      <button class="modal-cancel" onclick="document.getElementById('unknownModal').classList.remove('open'); pendingJson=null;">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- 削除確認モーダル -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal-box" style="max-width:360px">
+    <div class="modal-title" style="color:var(--pink)">🗑 削除の確認</div>
+    <p style="font-size:15px;margin-bottom:6px">以下のアイテムを削除します：</p>
+    <p style="font-size:16px;font-weight:900;color:var(--ink);margin-bottom:16px" id="deleteItemName"></p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">この操作は元に戻せません。</p>
+    <div class="modal-btns">
+      <button class="modal-save" style="background:#2a1a1a;border-color:var(--pink);color:var(--pink)" onclick="doDelete()">🗑 削除する</button>
+      <button class="modal-cancel" onclick="document.getElementById('deleteModal').classList.remove('open')">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- フォルダ選択モーダル -->
+<div class="folder-modal-overlay" id="folderModal">
+  <div class="folder-modal-box">
+    <div class="folder-modal-title">📂 フォルダからファイルを読み込む</div>
+    <div class="folder-modal-sub">フォルダを選択 → 使うファイルにチェック → 反映</div>
+    <div class="folder-drop-zone" id="folderDropZone">
+      <input type="file" id="folderFileInput" webkitdirectory multiple>
+      <div class="folder-drop-label">ここをタップして<br><span>フォルダを選択</span></div>
+    </div>
+    <div id="folderTreeArea" style="display:none">
+      <div class="folder-stats" id="folderStats"></div>
+      <div class="folder-ctrl-bar">
+        <button class="folder-ctrl-btn" onclick="ftCheckAll(true)">✅ 全選択</button>
+        <button class="folder-ctrl-btn" onclick="ftCheckAll(false)">☐ 全解除</button>
+        <button class="folder-ctrl-btn" onclick="ftExpandAll()">▼ 全展開</button>
+        <button class="folder-ctrl-btn" onclick="ftCollapseAll()">▶ 全折りたたみ</button>
+      </div>
+      <div class="folder-tree-box" id="folderTreeBox"></div>
+    </div>
+    <div class="folder-modal-btns">
+      <button class="folder-apply-btn" onclick="applyFolderSelection()">✓ 選択したファイルを反映</button>
+      <button class="folder-cancel-btn" onclick="closeFolderModal()">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<div class="log-modal-overlay" id="logModal">
+  <div class="log-modal-box">
+    <div class="log-modal-title" id="logModalTitle"></div>
+    <div class="log-modal-id" id="logModalId"></div>
+    <div class="log-modal-list" id="logModalList"></div>
+    <button class="log-modal-close" onclick="closeLogModal()">閉じる</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- 再開ゲート（門） -->
+<div id="resumeGate" style="display:none">
+  <div class="gate-roof">
+    <div class="gate-roof-beam"></div>
+    <div class="gate-roof-beam2"></div>
+  </div>
+  <div class="gate-inner">
+    <div class="gate-label">門</div>
+    <div class="gate-headline">次やること、1個くぐって始めよ</div>
+    <div class="gate-tasks" id="gateTasks"></div>
+    <button class="gate-skip" onclick="closeGate()">今は確認しない</button>
+  </div>
+</div>
+<!-- 扉演出 -->
+<div class="gate-doors" id="gateDoors">
+  <div class="gate-door left"></div>
+  <div class="gate-door right"></div>
+</div>
+
+<script>
+const STORE_KEY = 'dev_dashboard_v2';
+const GATE_KEY  = 'dev_dashboard_gate';
+
+// ── 再開ゲート ────────────────────────────────────────────────
+function getGateThresholdHours() {
+  try { const v = localStorage.getItem(GATE_KEY + '_threshold'); return v ? parseFloat(v) : 2; } catch(e) { return 2; }
+}
+function setGateThresholdHours(h) {
+  try { localStorage.setItem(GATE_KEY + '_threshold', String(h)); } catch(e) {}
+}
+function recordActivity() {
+  try { localStorage.setItem(GATE_KEY + '_lastActive', Date.now().toString()); } catch(e) {}
+}
+function shouldShowGate() {
+  try {
+    const last = parseInt(localStorage.getItem(GATE_KEY + '_lastActive') || '0', 10);
+    if (!last) return false;
+    return (Date.now() - last) / 1000 / 3600 >= getGateThresholdHours();
+  } catch(e) { return false; }
+}
+function pickGateTasks() {
+  // 緊急度が高い(urgent_important / important)もので、wip/activeのものだけ
+  const tasks = [];
+  data.items.forEach(item => {
+    if (!['wip','active'].includes(item.status)) return;
+    if (!['urgent_important','important'].includes(item.priority)) return;
+    const next = item.currentWork && item.currentWork.next
+      ? item.currentWork.next.split('\n')[0].slice(0, 50)
+      : '未定';
+    tasks.push({ id: item.id, app: item.name, next, priority: item.priority });
+  });
+  // 緊急度順（今すぐ → 計画的に）
+  tasks.sort((a,b) => PRIO_ORDER.indexOf(a.priority) - PRIO_ORDER.indexOf(b.priority));
+  return tasks.slice(0, 5);
+}
+function showGate() {
+  const tasks = pickGateTasks();
+  if (!tasks.length) { recordActivity(); return; }
+
+  document.getElementById('gateTasks').innerHTML = tasks.map(t => {
+    const def = PRIO_DEF[t.priority];
+    const isUndef = t.next === '未定';
+    return `<button class="gate-task-btn${isUndef ? ' gate-task-undef' : ''}" onclick="selectGateTask('${escH(t.id)}', this)">
+      <span class="gate-task-head">
+        <span class="gate-prio-dot prio-${def.color}"></span>
+        <span class="gate-task-app">${escH(t.app)}</span>
+      </span>
+      <span class="gate-task-next">${escH(t.next)}</span>
+    </button>`;
+  }).join('');
+  document.getElementById('resumeGate').style.display = 'flex';
+}
+function selectGateTask(id, btn) {
+  const doors = document.getElementById('gateDoors');
+  // ① 扉をフェードインで出現（閉まった状態を一瞬見せる）
+  doors.classList.remove('open');
+  doors.classList.add('show');
+  setTimeout(() => {
+    // ② 一瞬キープ後、両開きで開く
+    doors.classList.add('open');
+    setTimeout(() => {
+      // ③ 開き切ったら門・扉を消して設定タブへ
+      document.getElementById('resumeGate').style.display = 'none';
+      doors.classList.remove('open');
+      doors.classList.remove('show');
+      recordActivity();
+      goToManageTab();
+    }, 520);
+  }, 180);
+}
+function closeGate() {
+  document.getElementById('resumeGate').style.display = 'none';
+  recordActivity();
+}
+function checkGateOnLoad() {
+  if (shouldShowGate()) showGate();
+  else recordActivity();
+}
+
+const DEFAULT_DATA = {
+  lastUpdated: '2026-06-14',
+  globalLogs: [
+    { date: '2026-06-14 00:00', note: 'ダッシュボード初回セットアップ' }
+  ],
+  items: [
+    { id:'myplanner', createdAt:'2026-06-14 00:01', type:'APP', tags:null, name:'マイプランナー', url:'myplanner.noel-hazuki.workers.dev', status:'wip', statusLabel:'作業中',
+      fileGroups:[{label:'Cloudflare Workers', files:['index.html']}],
+      currentWork:{ summary:'妖怪退治要素との合併・キャラクターセリフ実装・ソース整理', spec:null, touchingFiles:['index.html'] },
+      logs:[{ date:'2026-06-14 00:00', note:'妖怪退治要素と合併。キャラクターセリフ実装。ソース整理。' }] },
+
+    { id:'bookmarker', createdAt:'2026-06-14 00:02', type:'APP', tags:null, name:'ブックマーカー', url:'bookmarker.noel-hazuki.workers.dev', status:'active', statusLabel:'稼働中',
+      fileGroups:[{label:'Cloudflare Pages', files:['index.html','sw.js','manifest.json']}],
+      currentWork:null,
+      logs:[{ date:'2026-06-14 00:00', note:'上下入れ替え機能追加・ホーム画面構成変更。' }] },
+
+    { id:'memo', createdAt:'2026-06-14 00:03', type:'APP', tags:null, name:'メモアプリ', url:'ローカルPWA（ホーム画面追加）', status:'wip', statusLabel:'作業中',
+      fileGroups:[{label:'Cloudflare Workers', files:['index.html','manifest.json','palette.html','sw.js']},{label:'ローカル', files:['icon-192.png','icon-512.png']}],
+      currentWork:{ summary:'修正依頼したい箇所あり。palette.htmlと連動したノグチさんカラーテーマシステム。', spec:null, touchingFiles:['index.html','palette.html'] },
+      logs:[{ date:'2026-06-14 00:00', note:'ツリー構造・マルチテーマ・カスタムパレットインポート実装済み。修正箇所検討中。' }] },
+
+    { id:'pokeka', createdAt:'2026-06-14 00:04', type:'APP', tags:'ポケカ', name:'ポケカデッキ分析', url:'pokeka2（Cloudflare Workers）', status:'hold', statusLabel:'保留中',
+      fileGroups:[{label:'Cloudflare Workers (pokeka2)', files:['worker.js']}],
+      currentWork:{ summary:'カード画像表示の手段がなく止まっている。\nデッキコードをURLに付けると公式サイトからスクレイプしてカード一覧JSONを返す機能は完成。', spec:'使い方: https://<WorkerURL>/?code=デッキコード', touchingFiles:['worker.js'] },
+      logs:[{ date:'2026-06-14 00:00', note:'デッキコード→JSON出力は完成。画像表示の手段が見つからず保留。' }] },
+
+    { id:'keiba', createdAt:'2026-06-14 00:05', type:'APP', tags:'競馬', name:'競馬メモアプリ', url:'未統合・未デプロイ', status:'wip', statusLabel:'作業中',
+      fileGroups:[{label:'ローカル（未デプロイ）', files:['keiba-memo.jsx','course-combo-sample.html','stallion-db-sample.html']}],
+      currentWork:{ summary:'3パーツを別々に開発中。統合はまだ。\n①馬メモ機能（実装済み）②コースデータ描画（止まり中）③種牡馬DB（作成中）', spec:'ワークフロー: 馬名登録 → ホームで「情報待ち◯頭」コピー → Claudeに渡す → JSONを取り込みタブに貼る', touchingFiles:['course-combo-sample.html'] },
+      logs:[{ date:'2026-06-14 00:00', note:'馬メモ・コースサンプル・種牡馬DB を別々に作成中。統合前。' }] },
+
+    { id:'pokeka-price', createdAt:'2026-06-14 00:06', type:'APP', tags:'ポケカ', name:'ポケカ価格調査アプリ', url:'構想段階', status:'idea', statusLabel:'構想中',
+      fileGroups:[],
+      currentWork:{ summary:'Stage1: カードごとに既存価格サイト（みんなのポケカ相場等）へリンク\nStage2: データエンドポイントが見つかれば価格をアプリ内表示', spec:null, touchingFiles:[] },
+      logs:[{ date:'2026-06-14 00:00', note:'構想のみ。2段階アプローチを検討中。' }] },
+
+    { id:'gigalith-deck', createdAt:'2026-06-14 00:07', type:'DCK', tags:'ポケカ', name:'ポケカ ギガイアスデッキ調整', url:'', status:'wip', statusLabel:'作業中',
+      fileGroups:[],
+      currentWork:{ summary:'イワパレス×ギガイアス（格闘タイプ）デッキの最適化。\n先攻展開率86%まで到達。化石/ランパートex ラインを全カット、イワパレス4-4、ポケパッド4枚採用で確定。', spec:'モンテカルロシミュレーション確認済み。ボスの指令4枚に戻す決定。バルーン採用（緊急ボード不採用）。スタジアム2枚構成（バトルコロシアム＋フェスティバルグラウンド）。', touchingFiles:[] },
+      logs:[{ date:'2026-06-14 00:00', note:'先攻展開率86%達成。主要構成確定。プライズリスク管理フレームワーク（3・4・1・1・1チェック）策定。' }] },
+
+    { id:'essay', createdAt:'2026-06-14 00:08', type:'RES', tags:'競馬', name:'優駿エッセイ賞 応募作品', url:'', status:'wip', statusLabel:'作業中',
+      fileGroups:[{label:'ローカル', files:['優駿エッセイ賞_競馬場に行きたくて_v6-1.md']}],
+      currentWork:{ summary:'「競馬場に行きたくて」v6-1（約3,450字）。詰め作業中。', spec:null, touchingFiles:['優駿エッセイ賞_競馬場に行きたくて_v6-1.md'] },
+      logs:[{ date:'2026-06-14 00:00', note:'v6-1まで進行。詰め作業中。' }] },
+
+    { id:'story-archive', createdAt:'2026-06-14 00:09', type:'RES', tags:null, name:'あのストーリーなんだっけ', url:'', status:'wip', statusLabel:'作業中',
+      fileGroups:[{label:'ローカル', files:['story-archive.jsx']}],
+      currentWork:{ summary:'作品ごとのあらすじ・人物・要点をAIで整理して貯めるアプリ。設計モック（story-archive.jsx）まで完成。localStorage永続化と編集UIはまだ。', spec:null, touchingFiles:['story-archive.jsx'] },
+      logs:[{ date:'2026-06-14 00:00', note:'設計モック完成。Re:ゼロサンプルデータ入り。本実装はまだ。' }] },
+
+    { id:'handoff-template', createdAt:'2026-06-14 00:10', type:'ADM', tags:null, name:'セッション引き継ぎテンプレ', url:'', status:'wip', statusLabel:'作業中',
+      fileGroups:[],
+      currentWork:{ summary:'チャット終了時に次セッションへ渡すテンプレの整備。\n現行フォーマット:\n■今やってること\n■ここまでの経緯\n■次にやること\n■持ち越しの懸念・未解決事項', spec:null, touchingFiles:[] },
+      logs:[{ date:'2026-06-14 00:00', note:'現行フォーマット運用中。さらに詰められるか検討中。' }] },
+
+    { id:'claude-limits', createdAt:'2026-06-14 00:11', type:'APP', tags:null, name:'Claudeでできること 説明HTML', url:'claude-limits（Cloudflare Workers）', status:'active', statusLabel:'稼働中',
+      fileGroups:[{label:'Cloudflare Workers', files:['index.html']}],
+      currentWork:null,
+      logs:[{ date:'2026-06-14 00:00', note:'CH.5 に知識カットオフの説明追加済み。' }] },
+
+    { id:'dashboard', createdAt:'2026-06-14 00:12', type:'ADM', tags:null, name:'このダッシュボード', url:'ローカルHTML', status:'wip', statusLabel:'作業中',
+      fileGroups:[{label:'ローカル', files:['dashboard.html']}],
+      currentWork:{ summary:'AIとやってること全体を管理するダッシュボード。JSONインポートで進捗更新。', spec:null, touchingFiles:['dashboard.html'] },
+      logs:[{ date:'2026-06-14 00:00', note:'初版作成。各種機能追加中。' }] },
+
+    { id:'coconala', createdAt:'2026-06-14 00:13', type:'RES', tags:'生活', name:'主婦の在宅ワーク（ココナラ）', url:'', status:'idea', statusLabel:'検討中',
+      fileGroups:[],
+      currentWork:{ summary:'ococナラに登録してパソコン出してくる段階から始める予定。', spec:null, touchingFiles:[] },
+      logs:[{ date:'2026-06-14 00:00', note:'検討開始。' }] }
+  ]
+};
+
+// ── データ管理 ────────────────────────────────────────────────
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return DEFAULT_DATA;
+    const d = JSON.parse(raw);
+    if (!d.globalLogs) d.globalLogs = [];
+    d.items.forEach((item, i) => {
+      if (!item.createdAt) item.createdAt = '2026-06-14 00:' + String(i).padStart(2,'0');
+      else if (item.createdAt.length === 10) item.createdAt += ' 00:00';
+      if (!item.fileGroups) item.fileGroups = item.files && item.files.length ? [{label:'ファイル', files: item.files}] : [];
+      // ログの日付も正規化
+      if (item.logs) item.logs.forEach(l => { if (l.date && l.date.length === 10) l.date += ' 00:00'; });
+      // lastTouchedも正規化
+      if (item.lastTouched && item.lastTouched.length === 10) item.lastTouched += ' 00:00';
+    });
+    return d;
+  } catch(e) { return DEFAULT_DATA; }
+}
+function saveData(d) { try { localStorage.setItem(STORE_KEY, JSON.stringify(d)); recordActivity(); } catch(e) {} }
+
+let data = loadData();
+let activeTab = '__recent__';
+
+// ── ユーティリティ ────────────────────────────────────────────
+function nowStr() {
+  const n = new Date();
+  return `${n.getFullYear()}-${p(n.getMonth()+1)}-${p(n.getDate())} ${p(n.getHours())}:${p(n.getMinutes())}`;
+}
+function p(n) { return String(n).padStart(2,'0'); }
+
+function escH(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\n/g,'<br>');
+}
+
+function slabel(s) {
+  if (!s) return '不明';
+  return { active:'稼働中', wip:'作業中', hold:'保留中', idea:'構想中', cancel:'中止', merged:'統合済み' }[s] || '不明(' + s + ')';
+}
+
+// 緊急度（アイゼンハワー・マトリクス）の定義
+const PRIO_ORDER = ['urgent_important','important','urgent','neither'];
+const PRIO_DEF = {
+  urgent_important: { label:'今すぐ',   color:'red',    full:'緊急かつ重要' },
+  important:        { label:'計画的に', color:'yellow', full:'緊急でないが重要' },
+  urgent:           { label:'サッと',   color:'green',  full:'緊急だけど重要でない' },
+  neither:          { label:'後回し',   color:'blue',   full:'緊急でも重要でもない' }
+};
+function plabel(p) { return PRIO_DEF[p] ? PRIO_DEF[p].label : ''; }
+function pcolor(p) { return PRIO_DEF[p] ? PRIO_DEF[p].color : 'none'; }
+
+// 種類（type）の定義
+const TYPE_DEF = {
+  APP: { label:'APP', full:'完成物・アプリ' },
+  RES: { label:'RES', full:'研究・考察・相談' },
+  DCK: { label:'DCK', full:'デッキ単体' },
+  ADM: { label:'ADM', full:'運営・事務' }
+};
+function tlabel(t) { return TYPE_DEF[t] ? TYPE_DEF[t].label : ''; }
+
+// タグ（tags）の固定語彙
+const TAGS_LIST = ['ポケカ', '競馬', '生活'];
+
+function addGlobalLog(note) {
+  if (!data.globalLogs) data.globalLogs = [];
+  data.globalLogs.unshift({ date: nowStr(), note });
+  if (data.globalLogs.length > 50) data.globalLogs = data.globalLogs.slice(0,50);
+}
+
+function copyText(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  try { document.execCommand('copy'); showToast('コピーしました ✓'); }
+  catch(e) { showToast('コピー失敗。手動でコピーしてください'); }
+  document.body.removeChild(ta);
+}
+
+function find(appId) {
+  return data.items.find(a => a.id === appId || a.name === appId) || null;
+}
+
+// ── 描画 ──────────────────────────────────────────────────────
+function render() {
+  document.getElementById('lastUpdated').textContent = '最終更新: ' + data.lastUpdated;
+
+  const active = data.items.filter(a => a.status === 'active').length;
+  const wip    = data.items.filter(a => a.status === 'wip').length;
+  const other  = data.items.filter(a => !['active','wip'].includes(a.status)).length;
+  document.getElementById('statActive').textContent = active;
+  document.getElementById('statWip').textContent    = wip;
+  document.getElementById('statHold').textContent   = other;
+
+  // タブバー（2026-06-26：4カテゴリタブ廃止。▦一覧がメイン入り口）
+  const tabBar = document.getElementById('tabBar');
+  tabBar.innerHTML =
+    '<button class="tab-btn' + (activeTab==='__recent__' ? ' active' : '') + '" data-cat="__recent__" onclick="switchTab(this)">最近の更新</button>' +
+    '<button class="tab-btn' + (activeTab==='__matrix__' ? ' active' : '') + '" data-cat="__matrix__" onclick="switchTab(this)">▦ 一覧</button>' +
+    '<button class="tab-btn' + (activeTab==='__priority__' ? ' active' : '') + '" data-cat="__priority__" onclick="switchTab(this)">🚩 緊急度</button>' +
+    '<button class="tab-btn' + (activeTab==='__manage__' ? ' active' : '') + '" data-cat="__manage__" onclick="switchTab(this)">⚙ 管理</button>';
+
+  // カード表示
+  document.getElementById('cardList').innerHTML = buildCards(activeTab);
+
+  // 描画完了後に折りたたみ▼を初期化
+  requestAnimationFrame(() => { requestAnimationFrame(initCwToggles); });
+}
+
+function buildManageTab() {
+  return `
+  <div class="import-section">
+    <div class="import-title">📥 進捗JSON を取り込む</div>
+    <div class="import-sub">チャット末尾のJSONをここに貼り付けて「反映」を押す。</div>
+    <textarea id="importJson" placeholder='{"type":"log","app":"マイプランナー","note":"今日やったこと"}'></textarea>
+    <button class="btn btn-import" onclick="doImport()">▶ 反映する</button>
+    <div class="import-result" id="importResult"></div>
+  </div>
+
+  <div class="prompt-section" style="margin-top:12px">
+    <div class="prompt-title">🎯 今日やることを出力</div>
+    <div class="prompt-sub">緊急度が「今すぐ・計画的に・サッと」のアイテムを抽出してJSONを生成。チャットに貼ると今日の段取りを組んでもらえる。</div>
+    <button class="btn btn-copy" style="margin-top:0" onclick="genTodayFocus()">🎯 今日やることをコピー</button>
+    <div class="prompt-preview" id="todayFocusPreview"></div>
+  </div>
+
+  <div class="prompt-section" style="margin-top:12px">
+    <div class="prompt-title">📓 今日の作業日誌を生成</div>
+    <div class="prompt-sub">今日更新されたログを全アプリからまとめてテキスト生成。Claudeに貼って整形してもらう用。</div>
+    <button class="btn btn-copy" style="margin-top:0" onclick="genDiaryText()">📓 日誌を生成してコピー</button>
+    <div class="prompt-preview" id="diaryPreview"></div>
+    <button class="preview-copy-btn" id="diaryCopyBtn" style="display:none" onclick="copyDiaryText()">📋 コピー</button>
+  </div>
+
+  <div class="import-section" style="margin-top:12px">
+    <div class="import-title">🔑 ID一覧をコピー</div>
+    <div class="import-sub">新しいチャットを始める前にコピーして、引き継ぎプロンプトの末尾に貼る。クロウくんがIDを正確に使えるようになる。</div>
+    <button class="btn btn-copy" style="margin-top:0" onclick="copyIdList()">📋 ID一覧をコピー</button>
+    <div class="prompt-preview" id="idListPreview"></div>
+  </div>
+
+  <div class="import-section" style="margin-top:12px">
+    <div class="import-title">💾 データをエクスポート</div>
+    <div class="import-sub">localStorageのデータをJSONファイルとしてダウンロード。バックアップ用。</div>
+    <button class="btn btn-add" style="margin-top:0" onclick="doExport()">💾 JSONをダウンロード</button>
+  </div>
+
+  <div class="import-section" style="margin-top:12px">
+    <div class="import-title">📤 バックアップから復元</div>
+    <div class="import-sub">エクスポートしたJSONファイルを選んで、今のデータを全部置き換える。データが飛んだ時や、IDをまとめて直したい時に使う。元に戻せないので、不安なら先に「💾 JSONをダウンロード」で今の状態を保存しておくこと。</div>
+    <input type="file" id="restoreFileInput" accept="application/json,.json" style="display:none" onchange="handleRestoreFile(this)">
+    <button class="btn btn-add" style="margin-top:0" onclick="document.getElementById('restoreFileInput').click()">📤 JSONファイルを選んで復元</button>
+    <div class="import-result" id="restoreResult"></div>
+  </div>
+
+  <div class="import-section" style="margin-top:12px;border-color:#553333">
+    <div class="import-title" style="color:var(--pink)">⚠ データ管理</div>
+    <div class="import-sub">localStorageのデータをリセットして初期状態に戻す。操作ログ・追加したアイテムは全て消える。</div>
+    <button class="btn" style="background:#2a1a1a;border-color:var(--pink);color:var(--pink);margin-top:0" onclick="resetData()">🗑 データをリセット（初期状態に戻す）</button>
+  </div>
+
+  <div class="import-section" style="margin-top:12px;border-color:var(--purple)">
+    <div class="import-title" style="color:var(--purple)">🚪 再開ゲート設定</div>
+    <div class="import-sub">最後の操作から何時間空いたら再開ゲートを表示するか。現在：<strong id="gateThresholdDisplay"></strong>時間</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:2px">
+      <button class="btn" style="background:var(--panel2);border-color:var(--purple);color:var(--purple);margin-top:0;width:auto;padding:9px 18px" onclick="setGateHours(1)">1h</button>
+      <button class="btn" style="background:var(--panel2);border-color:var(--purple);color:var(--purple);margin-top:0;width:auto;padding:9px 18px" onclick="setGateHours(2)">2h</button>
+      <button class="btn" style="background:var(--panel2);border-color:var(--purple);color:var(--purple);margin-top:0;width:auto;padding:9px 18px" onclick="setGateHours(4)">4h</button>
+      <button class="btn" style="background:var(--panel2);border-color:var(--purple);color:var(--purple);margin-top:0;width:auto;padding:9px 18px" onclick="setGateHours(6)">6h</button>
+    </div>
+    <button class="btn" style="background:var(--panel2);border-color:var(--muted);color:var(--muted);margin-top:8px" onclick="showGate()">▶ 今すぐゲートをテスト表示</button>
+  </div>`;
+}
+
+
+function buildCards(cat) {
+  let html = '';
+  if (cat === '__manage__') {
+    return buildManageTab();
+  } else if (cat === '__priority__') {
+    return buildPriorityTab();
+  } else if (cat === '__matrix__') {
+    return buildMatrixTab();
+  } else if (cat === '__recent__') {
+    const glogs = (data.globalLogs || []).slice(0,50);
+    if (glogs.length) {
+      html += '<div style="background:var(--panel);border:1px solid var(--line2);border-radius:14px;padding:14px;margin-bottom:12px;">';
+      html += '<div class="sec-label" style="margin-bottom:6px">操作ログ</div>';
+      html += '<div class="log-scroll">';
+      glogs.forEach(l => {
+        html += '<div class="log-entry"><span class="log-date">' + escH(l.date) + '</span><span class="log-text">' + escH(l.note) + '</span></div>';
+      });
+      html += '</div></div>';
+    }
+    const sorted = [...data.items].sort((a,b) => (b.lastTouched||b.createdAt||'').localeCompare(a.lastTouched||a.createdAt||''));
+    sorted.forEach(item => { html += renderCard(item); });
+  }
+  return html;
+}
+
+function buildPriorityTab() {
+  // 緊急度ごとに振り分け（カードは更新順）
+  const sorted = [...data.items].sort((a,b) => (b.lastTouched||b.createdAt||'').localeCompare(a.lastTouched||a.createdAt||''));
+  const buckets = {}; PRIO_ORDER.forEach(p => buckets[p] = []); buckets.__none__ = [];
+  sorted.forEach(item => {
+    if (item.priority && PRIO_DEF[item.priority]) buckets[item.priority].push(item);
+    else buckets.__none__.push(item);
+  });
+  let html = '';
+  PRIO_ORDER.forEach(p => {
+    const def = PRIO_DEF[p];
+    const list = buckets[p];
+    html += '<div class="prio-section-head">' +
+      '<span class="prio-dot prio-' + def.color + '"></span>' +
+      '<span class="prio-section-title">' + def.label + '</span>' +
+      '<span class="prio-section-count">' + def.full + '・' + list.length + '件</span>' +
+      '</div>';
+    if (list.length) list.forEach(item => { html += renderCard(item); });
+    else html += '<div class="prio-empty">なし</div>';
+  });
+  // 未設定
+  const none = buckets.__none__;
+  if (none.length) {
+    html += '<div class="prio-section-head">' +
+      '<span class="prio-dot prio-none"></span>' +
+      '<span class="prio-section-title">未設定</span>' +
+      '<span class="prio-section-count">' + none.length + '件</span>' +
+      '</div>';
+    none.forEach(item => { html += renderCard(item); });
+  }
+  return html;
+}
+
+function buildMatrixTab() {
+  // 緊急度ごとに振り分け（カードは更新順、buildPriorityTabと同じ仕分け方）
+  const sorted = [...data.items].sort((a,b) => (b.lastTouched||b.createdAt||'').localeCompare(a.lastTouched||a.createdAt||''));
+  const buckets = {}; PRIO_ORDER.forEach(p => buckets[p] = []); buckets.__none__ = [];
+  sorted.forEach(item => {
+    if (item.priority && PRIO_DEF[item.priority]) buckets[item.priority].push(item);
+    else buckets.__none__.push(item);
+  });
+
+  const cellHtml = (p) => {
+    const def = PRIO_DEF[p];
+    const list = buckets[p];
+    let inner = '<div class="matrix-cell-head">' +
+      '<span class="matrix-cell-title">' + def.label + '</span>' +
+      '<span class="matrix-cell-count">' + list.length + '件</span>' +
+      '</div>';
+    if (list.length) {
+      inner += '<div class="matrix-item-list">' +
+        list.map(item => '<button class="matrix-item-btn" onclick="jumpToCard(\'' + escH(item.id) + '\')">' + escH(item.name) + '</button>').join('') +
+        '</div>';
+    } else {
+      inner += '<div class="matrix-cell-empty">なし</div>';
+    }
+    return '<div class="matrix-cell matrix-' + def.color + '">' + inner + '</div>';
+  };
+
+  let html = '<div class="matrix-grid">' +
+    cellHtml('urgent_important') + cellHtml('important') +
+    cellHtml('urgent') + cellHtml('neither') +
+    '</div>';
+
+  // 未設定枠（5マス目）
+  const none = buckets.__none__;
+  html += '<div class="matrix-none-section">' +
+    '<div class="matrix-none-head">' +
+    '<span class="prio-dot prio-none"></span>' +
+    '<span class="matrix-none-title">未設定</span>' +
+    '<span class="matrix-cell-count">' + none.length + '件</span>' +
+    '</div>';
+  if (none.length) {
+    html += '<div class="matrix-item-list">' +
+      none.map(item => '<button class="matrix-item-btn" onclick="jumpToCard(\'' + escH(item.id) + '\')">' + escH(item.name) + '</button>').join('') +
+      '</div>';
+  } else {
+    html += '<div class="matrix-cell-empty">なし</div>';
+  }
+  html += '</div>';
+
+  return html;
+}
+
+function jumpToCard(id) {
+  // 🚩緊急度タブ（フルカード表示）に切り替えてから対象カードまでスクロール
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.cat === '__priority__');
+  });
+  goToTab('__priority__');
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const el = document.getElementById('card_' + id);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('card-jump-flash');
+        setTimeout(() => el.classList.remove('card-jump-flash'), 1450);
+      }
+    });
+  });
+}
+
+function switchTab(btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  goToTab(btn.dataset.cat);
+}
+function goToTab(cat) {
+  activeTab = cat;
+  document.getElementById('cardList').innerHTML = buildCards(activeTab);
+  if (activeTab === '__manage__') { updateReqSelect(); updateGateThresholdDisplay(); }
+  requestAnimationFrame(() => { requestAnimationFrame(initCwToggles); });
+}
+function goToManageTab() {
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.cat === '__manage__');
+  });
+  goToTab('__manage__');
+}
+
+function renderCard(item) {
+  // ファイルグループ
+  let fileHtml = '';
+  const groups = item.fileGroups && item.fileGroups.length ? item.fileGroups : (item.files && item.files.length ? [{label:'ファイル', files:item.files}] : []);
+  if (groups.length) {
+    fileHtml = '<div class="sec-label">ファイル構成</div>';
+    groups.forEach(g => {
+      fileHtml += '<div class="file-group-label">' + escH(g.label) + '</div>';
+      fileHtml += '<div class="file-list">' + g.files.map(f => '<span class="file-tag">' + escH(f) + '</span>').join('') + '</div>';
+    });
+  }
+
+  const cwUid = 'cw_' + item.id;
+  const cwHtml = item.currentWork ? (
+    '<div class="current-work" id="' + cwUid + '">' +
+    '<div class="current-work-title">▶ 現在の作業</div>' +
+    '<div class="cw-wrap">' +
+    '<div class="current-work-body cw-collapsible">' + escH(item.currentWork.summary) + '</div>' +
+    '</div>' +
+    (item.currentWork.next ?
+      '<div class="sec-label" style="margin-top:8px;color:var(--cyan)">▷ 次やること</div>' +
+      '<div class="cw-wrap">' +
+      '<div class="current-work-body" style="color:var(--ink)">' + escH(item.currentWork.next) + '</div>' +
+      '</div>' : '') +
+    (item.currentWork.spec ?
+      '<div class="sec-label" style="margin-top:8px">仕様メモ</div>' +
+      '<div class="cw-wrap">' +
+      '<div class="current-work-body cw-collapsible" style="font-size:13px;color:var(--muted)">' + escH(item.currentWork.spec) + '</div>' +
+      '</div>' : '') +
+    (item.currentWork.touchingFiles && item.currentWork.touchingFiles.length ?
+      '<div class="sec-label" style="margin-top:8px">触ってるファイル</div>' +
+      '<div class="cw-wrap">' +
+      '<div class="cw-collapsible" style="display:-webkit-box">' + item.currentWork.touchingFiles.map(f => '<span class="work-file">' + escH(f) + '</span>').join('') + '</div>' +
+      '</div>' : '') +
+    '</div>'
+  ) : '';
+
+  const logsHtml = item.logs && item.logs.length ? (
+    '<div class="sec-label" style="margin-top:10px">更新ログ</div>' +
+    [...item.logs].reverse().slice(0,3).map(l =>
+      '<div class="log-entry card-log" onclick="toggleLogNote(this)">' +
+      '<span class="log-date">' + escH(l.date) + '</span>' +
+      '<span class="log-text card-log-note">' + escH(l.note) + '</span>' +
+      '</div>'
+    ).join('') +
+    (item.logs.length > 3 ?
+      '<button class="log-more-btn" onclick="openLogModal(\'' + escH(item.id) + '\')">▽ 全' + item.logs.length + '件を見る</button>'
+      : '')
+  ) : '';
+
+  const urlStr = item.url || '';
+  const urlHtml = urlStr ? '<div class="card-url">' + (
+    urlStr.includes('.workers.dev') || urlStr.includes('.pages.dev') || urlStr.startsWith('http')
+      ? '<a href="https://' + urlStr.replace(/^https?:\/\//, '') + '" target="_blank">' + escH(urlStr) + '</a>'
+      : escH(urlStr)
+  ) + '</div>' : '';
+
+  const mergedHtml = item.mergedInto ? '<div class="merged-into">→ <span>' + escH(item.mergedInto) + '</span> に統合</div>' : '';
+
+  return '<div class="card status-' + item.status + '" id="card_' + escH(item.id) + '">' +
+    '<div class="card-header">' +
+    '<div class="card-name">' + escH(item.name) + '<span class="card-id">' + escH(item.id) + '</span></div>' +
+    '<button class="card-edit-btn" onclick="openEdit(\'' + item.id + '\')">✏️</button>' +
+    '<button class="card-edit-btn" style="color:var(--pink);border-color:transparent" onclick="confirmDelete(\'' + item.id + '\')" title="削除">🗑</button>' +
+    '</div>' +
+    '<div class="card-badges">' +
+    (item.type && TYPE_DEF[item.type] ? '<span class="type-badge type-' + item.type.toLowerCase() + '">' + escH(tlabel(item.type)) + '</span>' : '') +
+    (item.tags ? '<span class="tag-badge">' + escH(item.tags) + '</span>' : '') +
+    (item.priority && PRIO_DEF[item.priority] ? '<span class="prio-badge prio-' + pcolor(item.priority) + '">' + escH(plabel(item.priority)) + '</span>' : '') +
+    '<span class="status-badge">' + escH(item.statusLabel) + '</span>' +
+    '</div>' +
+    urlHtml + mergedHtml + fileHtml + cwHtml + logsHtml +
+    '</div>';
+}
+
+// ── JSONインポート ────────────────────────────────────────────
+function doImport() {
+  const importEl = document.getElementById('importJson');
+  if (!importEl) { showToast('管理タブから操作してください'); return; }
+  const raw = importEl.value.trim();
+  const result = document.getElementById('importResult');
+  result.style.display = 'block';
+  let json;
+  try { json = JSON.parse(raw); } catch(e) {
+    result.className = 'import-result err';
+    result.textContent = 'JSONのパース失敗: ' + e.message; return;
+  }
+  try {
+    applyJson(json);
+    saveData(data); render();
+    result.className = 'import-result ok';
+    result.textContent = '✓ 反映しました';
+    const imp = document.getElementById('importJson'); if (imp) imp.value = '';
+    showToast('反映しました ✓');
+  } catch(e) {
+    if (e.message !== '__pending__') {
+      result.className = 'import-result err';
+      result.textContent = 'エラー: ' + e.message;
+    }
+  }
+}
+
+// 未登録IDのJSON一時保留
+let pendingJson = null;
+
+function applyJson(json) {
+  if (Array.isArray(json)) { json.forEach(applyJson); return; }
+  const dateStr = json.date || nowStr();
+  data.lastUpdated = dateStr.slice(0,10);
+
+  // new_itemはそのまま処理
+  if (json.type === 'new_item') {
+    data.items.push({
+      id: json.id || json.name.replace(/\s/g,'_') + '_' + Date.now(),
+      type: (json.itemType && TYPE_DEF[json.itemType]) ? json.itemType : 'APP',
+      tags: (json.tags && TAGS_LIST.includes(json.tags)) ? json.tags : null,
+      name: json.name, url: json.url || '',
+      status: json.status || 'wip', statusLabel: slabel(json.status || 'wip'),
+      fileGroups: json.fileGroups || [],
+      currentWork: json.currentWork || null,
+      createdAt: dateStr,
+      logs: [{ date: dateStr, note: '新規登録' + (json.note ? ': '+json.note : '') }]
+    });
+    addGlobalLog(json.name + ' 追加');
+    return;
+  }
+
+  // IDチェック
+  const item = find(json.app);
+  if (!item) {
+    // 未登録IDなら確認ダイアログへ
+    pendingJson = json;
+    document.getElementById('unknownIdText').textContent = json.app;
+    document.getElementById('unknownNameInput').value = json.app;
+    document.getElementById('unknownModal').classList.add('open');
+    throw new Error('__pending__'); // 処理中断
+  }
+
+  // priorityフィールドはどのtypeでも反映
+  if (json.priority !== undefined) {
+    item.priority = (json.priority && PRIO_DEF[json.priority]) ? json.priority : null;
+  }
+
+  // itemType・tagsフィールドはどのtypeでも反映
+  if (json.itemType !== undefined) {
+    item.type = (json.itemType && TYPE_DEF[json.itemType]) ? json.itemType : item.type;
+  }
+  if (json.tags !== undefined) {
+    item.tags = (json.tags && TAGS_LIST.includes(json.tags)) ? json.tags : null;
+  }
+
+  // nameフィールド（表示名変更）はどのtypeでも反映
+  if (json.name !== undefined && json.name !== null && String(json.name).trim()) {
+    item.name = String(json.name).trim();
+  }
+
+  // nextフィールド（次やること）はどのtypeでも反映
+  if (json.next !== undefined) {
+    if (!item.currentWork) item.currentWork = { summary: '', spec: null, touchingFiles: [] };
+    item.currentWork.next = json.next || '';
+  }
+
+  switch(json.type) {
+    case 'log': {
+      if (!item.logs) item.logs = [];
+      item.logs.push({ date: dateStr, note: json.note });
+      if (json.status) { item.status = json.status; item.statusLabel = slabel(json.status); }
+      item.lastTouched = dateStr;
+      addGlobalLog(item.name + ' 更新');
+      break;
+    }
+    case 'work': {
+      item.currentWork = { summary: json.summary||'', spec: json.spec||null, touchingFiles: json.touchingFiles||[] };
+      if (!item.logs) item.logs = [];
+      item.logs.push({ date: dateStr, note: '作業内容更新: ' + (json.summary||'') });
+      if (json.status) { item.status = json.status; item.statusLabel = slabel(json.status); }
+      item.lastTouched = dateStr;
+      addGlobalLog(item.name + ' 作業内容更新');
+      break;
+    }
+    case 'files': {
+      if (json.fileGroups) { item.fileGroups = json.fileGroups; }
+      else if (json.files) { item.fileGroups = [{label:'ファイル', files: json.files}]; }
+      if (!item.logs) item.logs = [];
+      item.logs.push({ date: dateStr, note: 'ファイル構成更新' });
+      item.lastTouched = dateStr;
+      addGlobalLog(item.name + ' ファイル構成更新');
+      break;
+    }
+    case 'status': {
+      if (!json.status) { throw new Error('statusフィールドが空です'); }
+      item.status = json.status; item.statusLabel = slabel(json.status);
+      if (item.statusLabel === json.status) { throw new Error('不明なステータス値: "' + json.status + '"'); }
+      if (json.mergedInto) item.mergedInto = json.mergedInto;
+      if (!item.logs) item.logs = [];
+      item.logs.push({ date: dateStr, note: 'ステータス → ' + item.statusLabel + (json.note ? ': '+json.note : '') });
+      item.lastTouched = dateStr;
+      addGlobalLog(item.name + ' ステータス変更 → ' + item.statusLabel);
+      break;
+    }
+    case 'priority': {
+      // priorityフィールドは上で反映済み
+      if (!item.logs) item.logs = [];
+      item.logs.push({ date: dateStr, note: '緊急度 → ' + (plabel(item.priority) || '未設定') });
+      item.lastTouched = dateStr;
+      addGlobalLog(item.name + ' 緊急度変更 → ' + (plabel(item.priority) || '未設定'));
+      break;
+    }
+    default:
+      throw new Error('未知のtype: "' + json.type + '"');
+  }
+}
+
+function doRegisterUnknown() {
+  if (!pendingJson) return;
+  const name = document.getElementById('unknownNameInput').value.trim() || pendingJson.app;
+  const type = document.getElementById('unknownTypeSelect').value;
+  const tags = document.getElementById('unknownTagsSelect').value || null;
+  const dateStr = nowStr();
+  // 新規アイテムを作成
+  const newItem = {
+    id: pendingJson.app,
+    type,
+    tags,
+    name,
+    url: '',
+    status: 'wip',
+    statusLabel: slabel('wip'),
+    fileGroups: [],
+    currentWork: null,
+    createdAt: dateStr,
+    logs: [{ date: dateStr, note: '未登録IDから自動作成' }]
+  };
+  data.items.push(newItem);
+  addGlobalLog(name + ' 自動登録');
+  // 元のJSONを再実行
+  const json = pendingJson;
+  pendingJson = null;
+  document.getElementById('unknownModal').classList.remove('open');
+  try {
+    applyJson(json);
+    saveData(data); render();
+    showToast('「' + name + '」を登録して反映しました ✓');
+  } catch(e) {
+    showToast('反映エラー: ' + e.message);
+  }
+}
+
+// ── エクスポート ──────────────────────────────────────────────
+function doExport() {
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const date = nowStr().slice(0, 10);
+  a.href = url;
+  a.download = 'dashboard-backup-' + date + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('エクスポートしました ✓');
+}
+
+// ── 復元（バックアップJSON全体読み込み） ──────────────────────
+function handleRestoreFile(inputEl) {
+  const file = inputEl.files && inputEl.files[0];
+  const resultEl = document.getElementById('restoreResult');
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    let parsed;
+    try {
+      parsed = JSON.parse(evt.target.result);
+    } catch (err) {
+      if (resultEl) {
+        resultEl.style.display = 'block';
+        resultEl.className = 'import-result err';
+        resultEl.textContent = 'JSONの読み込みに失敗：ファイルが壊れてるか、形式が違うかも。';
+      }
+      inputEl.value = '';
+      return;
+    }
+    if (!parsed || !Array.isArray(parsed.items)) {
+      if (resultEl) {
+        resultEl.style.display = 'block';
+        resultEl.className = 'import-result err';
+        resultEl.textContent = '形式が合わない（itemsの配列が見つからない）。エクスポートしたファイルか確認して。';
+      }
+      inputEl.value = '';
+      return;
+    }
+    const itemCount = parsed.items.length;
+    if (!confirm('今のデータ全部（' + (data.items ? data.items.length : 0) + '件）を、このファイルの内容（' + itemCount + '件）で置き換える。元に戻せません。よろしいですか？')) {
+      inputEl.value = '';
+      return;
+    }
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(parsed));
+      data = loadData();
+      activeTab = '__recent__';
+      render();
+      const resultEl2 = document.getElementById('restoreResult');
+      if (resultEl2) {
+        resultEl2.style.display = 'block';
+        resultEl2.className = 'import-result ok';
+        resultEl2.textContent = '復元しました ✓（' + itemCount + '件）';
+      }
+      showToast('復元しました ✓');
+    } catch (err) {
+      if (resultEl) {
+        resultEl.style.display = 'block';
+        resultEl.className = 'import-result err';
+        resultEl.textContent = '保存に失敗：' + err.message;
+      }
+    }
+    inputEl.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// ── 今日の日誌生成 ───────────────────────────────────────────
+let lastDiaryText = '';
+function genDiaryText() {
+  const today = nowStr().slice(0, 10);
+  const entries = [];
+  data.items.forEach(item => {
+    if (!item.logs) return;
+    item.logs.forEach(l => {
+      if (l.date && l.date.startsWith(today)) {
+        entries.push({ time: l.date.slice(11, 16), appName: item.name, note: l.note });
+      }
+    });
+  });
+  (data.globalLogs || []).forEach(l => {
+    if (l.date && l.date.startsWith(today)) {
+      entries.push({ time: l.date.slice(11, 16), appName: '【操作ログ】', note: l.note });
+    }
+  });
+  if (!entries.length) { showToast('今日のログがまだありません'); return; }
+  entries.sort((a, b) => a.time.localeCompare(b.time));
+  const groups = {};
+  const order = [];
+  entries.forEach(e => {
+    if (!groups[e.appName]) { groups[e.appName] = []; order.push(e.appName); }
+    groups[e.appName].push(e);
+  });
+  let text = today + ' の作業日誌\n' + '─'.repeat(30) + '\n\n';
+  order.forEach(appName => {
+    text += '■ ' + appName + '\n';
+    groups[appName].forEach(e => { text += '  - ' + e.time + ' ' + e.note + '\n'; });
+    text += '\n';
+  });
+  text += '─'.repeat(30);
+  lastDiaryText = text;
+  const preview = document.getElementById('diaryPreview');
+  const copyBtn = document.getElementById('diaryCopyBtn');
+  if (preview) { preview.style.display = 'block'; preview.textContent = text; }
+  if (copyBtn) { copyBtn.style.display = 'block'; }
+  copyText(text);
+}
+function copyDiaryText() { if (lastDiaryText) copyText(lastDiaryText); }
+
+// ── ID一覧コピー ──────────────────────────────────────────────
+function copyIdList() {
+  const lines = data.items.map(item => `${item.id}=${item.name}`).join('\n');
+  const text = '【ダッシュボードID一覧】\n' + lines + '\n\n※JSONのappフィールドには左側のIDを使うこと。';
+  copyText(text);
+  const preview = document.getElementById('idListPreview');
+  if (preview) { preview.style.display = 'block'; preview.textContent = text; }
+}
+
+// ── 今日やること出力 ──────────────────────────────────────────
+function genTodayFocus() {
+  const targets = ['urgent_important','important','urgent']; // 青（neither）は除外
+  const tasks = data.items
+    .filter(item => item.priority && targets.includes(item.priority))
+    .sort((a,b) => targets.indexOf(a.priority) - targets.indexOf(b.priority));
+
+  if (!tasks.length) {
+    showToast('緊急度が設定されたアイテムがありません');
+    return;
+  }
+
+  const today = nowStr().slice(0,10);
+  const payload = {
+    type: 'today_focus',
+    date: today,
+    message: '今日やることを教えて。優先順位と段取りを組んでほしい。',
+    tasks: tasks.map(item => ({
+      name: item.name,
+      priority: plabel(item.priority),
+      priority_key: item.priority,
+      status: item.statusLabel,
+      work: item.currentWork ? item.currentWork.summary : null,
+      type: item.type,
+      tags: item.tags
+    }))
+  };
+
+  const text = JSON.stringify(payload, null, 2);
+  copyText(text);
+  const preview = document.getElementById('todayFocusPreview');
+  if (preview) { preview.style.display = 'block'; preview.textContent = text; }
+}
+
+// ── フォルダ選択モーダル ──────────────────────────────────────
+let ftTree = null;
+let ftCollapsed = new Set();
+
+function openFolderModal() {
+  ftTree = null; ftCollapsed.clear();
+  document.getElementById('folderTreeArea').style.display = 'none';
+  document.getElementById('folderTreeBox').innerHTML = '';
+  document.getElementById('folderStats').textContent = '';
+  // inputをリセット
+  const inp = document.getElementById('folderFileInput');
+  inp.value = '';
+  document.getElementById('folderModal').classList.add('open');
+}
+
+function closeFolderModal() {
+  document.getElementById('folderModal').classList.remove('open');
+}
+
+function openLogModal(id) {
+  const item = data.items.find(a => a.id === id);
+  if (!item || !item.logs || !item.logs.length) return;
+  document.getElementById('logModalTitle').textContent = item.name;
+  document.getElementById('logModalId').textContent = item.id;
+  document.getElementById('logModalList').innerHTML = [...item.logs].reverse().map(l =>
+    '<div class="log-entry card-log" onclick="toggleLogNote(this)">' +
+    '<span class="log-date">' + escH(l.date) + '</span>' +
+    '<span class="log-text card-log-note">' + escH(l.note) + '</span>' +
+    '</div>'
+  ).join('');
+  document.getElementById('logModal').classList.add('open');
+}
+function closeLogModal() {
+  document.getElementById('logModal').classList.remove('open');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('folderFileInput').addEventListener('change', function(e) {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    ftTree = ftBuildTree(files);
+    ftCollapsed.clear();
+    document.getElementById('folderTreeArea').style.display = 'block';
+    ftRender();
+  });
+  document.getElementById('folderModal').addEventListener('click', function(e) {
+    if (e.target === this) closeFolderModal();
+  });
+});
+
+function ftBuildTree(files) {
+  const root = { name: files[0].webkitRelativePath.split('/')[0], children: {}, isDir: true, path: '' };
+  files.forEach(file => {
+    const parts = file.webkitRelativePath.split('/');
+    let node = root;
+    let pathSoFar = parts[0];
+    for (let i = 1; i < parts.length; i++) {
+      const part = parts[i];
+      pathSoFar += '/' + part;
+      if (!node.children[part]) {
+        node.children[part] = { name: part, children: {}, isDir: i < parts.length - 1, path: pathSoFar, checked: true };
+      }
+      node = node.children[part];
+    }
+  });
+  return root;
+}
+
+function ftGetAllFiles(node, list) {
+  if (!list) list = [];
+  if (!node.isDir) { list.push(node); return list; }
+  Object.values(node.children).forEach(c => ftGetAllFiles(c, list));
+  return list;
+}
+
+function ftRender() {
+  if (!ftTree) return;
+  const box = document.getElementById('folderTreeBox');
+  const lines = [];
+  let fileCount = 0, checkedCount = 0;
+
+  function walk(node, prefix, isLast, depth) {
+    const connector = depth === 0 ? '' : (isLast ? '└─ ' : '├─ ');
+    const childPrefix = depth === 0 ? '' : (isLast ? '    ' : '│   ');
+    if (node.isDir) {
+      const isCol = ftCollapsed.has(node.path);
+      lines.push({ type:'dir', text: prefix + connector + (isCol ? '▶ ' : '▼ ') + '📁 ' + node.name, path: node.path, collapsed: isCol });
+      if (!isCol) {
+        const children = Object.values(node.children).sort((a,b) => {
+          if (a.isDir !== b.isDir) return b.isDir ? 1 : -1;
+          return a.name.localeCompare(b.name);
+        });
+        children.forEach((c, i) => walk(c, prefix + (depth === 0 ? '' : childPrefix), i === children.length - 1, depth + 1));
+      }
+    } else {
+      fileCount++;
+      if (node.checked) checkedCount++;
+      lines.push({ type:'file', text: prefix + connector + node.name, node });
+    }
+  }
+
+  walk(ftTree, '', true, 0);
+
+  box.innerHTML = lines.map((l, i) => {
+    if (l.type === 'dir') {
+      return '<span class="ft-folder" onclick="ftToggleDir(\'' + l.path.replace(/'/g,"\\'") + '\')">' + escH(l.text) + '</span>';
+    } else {
+      const id = 'ftcb_' + i;
+      const ck = l.node.checked ? 'checked' : '';
+      return '<div class="ft-file-row">' +
+        '<input type="checkbox" class="ft-cb" id="' + id + '" ' + ck + ' onchange="ftToggleFile(this, \'' + l.node.path.replace(/'/g,"\\'") + '\')">' +
+        '<label class="ft-file-label ' + (l.node.checked ? 'checked' : '') + '" for="' + id + '">' + escH(l.text) + '</label>' +
+        '</div>';
+    }
+  }).join('');
+
+  document.getElementById('folderStats').textContent = 'ファイル ' + fileCount + '件 ／ ' + checkedCount + '件選択中';
+}
+
+function ftToggleDir(path) {
+  if (ftCollapsed.has(path)) ftCollapsed.delete(path);
+  else ftCollapsed.add(path);
+  ftRender();
+}
+
+function ftFindNode(path) {
+  function search(node) {
+    if (node.path === path) return node;
+    for (const c of Object.values(node.children)) { const r = search(c); if (r) return r; }
+    return null;
+  }
+  return search(ftTree);
+}
+
+function ftToggleFile(cb, path) {
+  const node = ftFindNode(path);
+  if (node) { node.checked = cb.checked; ftRender(); }
+}
+
+function ftCheckAll(val) {
+  ftGetAllFiles(ftTree).forEach(f => f.checked = val);
+  ftRender();
+}
+
+function ftExpandAll() { ftCollapsed.clear(); ftRender(); }
+function ftCollapseAll() {
+  function collect(node) {
+    if (node.isDir && node.path) { ftCollapsed.add(node.path); Object.values(node.children).forEach(collect); }
+  }
+  if (ftTree) collect(ftTree);
+  ftRender();
+}
+
+function applyFolderSelection() {
+  if (!ftTree) { showToast('フォルダを選択してください'); return; }
+  const selected = ftGetAllFiles(ftTree).filter(f => f.checked);
+  if (!selected.length) { showToast('ファイルが選択されていません'); return; }
+
+  // フォルダパスごとにグループ化
+  const groups = {};
+  const groupOrder = [];
+  selected.forEach(f => {
+    const parts = f.path.split('/');
+    const folderPath = parts.slice(0, -1).join('/') + '/';
+    const fileName = parts[parts.length - 1];
+    if (!groups[folderPath]) { groups[folderPath] = []; groupOrder.push(folderPath); }
+    groups[folderPath].push(fileName);
+  });
+
+  // 編集モーダルのfileGroupsに追加
+  groupOrder.forEach(folderPath => {
+    appendFileGroup(folderPath, groups[folderPath].join(', '));
+  });
+
+  closeFolderModal();
+  showToast(selected.length + '件のファイルを反映しました ✓');
+}
+
+// ── 編集モーダル ──────────────────────────────────────────────
+function toggleMergedField(val) {
+  document.getElementById('mergedIntoField').style.display = val === 'merged' ? 'block' : 'none';
+}
+
+function appendFileGroup(label, files) {
+  label = label || ''; files = files || '';
+  const container = document.getElementById('editFileGroups');
+  const row = document.createElement('div');
+  row.className = 'fg-row';
+  row.style.cssText = 'background:var(--bg);border:1px solid var(--line2);border-radius:8px;padding:8px 10px;margin-bottom:6px;';
+  row.innerHTML =
+    '<div style="display:flex;gap:6px;align-items:center;margin-bottom:5px">' +
+    '<input class="fg-label modal-input" type="text" placeholder="Cloudflare Workers / ローカル 等" value="' + label.replace(/"/g,'&quot;') + '" style="flex:1;font-size:13px;padding:6px 10px">' +
+    '<button type="button" onclick="this.closest(\'.fg-row\').remove()" style="background:none;border:1px solid var(--line2);border-radius:6px;color:var(--muted);padding:4px 8px;cursor:pointer;font-size:12px;">✕</button>' +
+    '</div>' +
+    '<input class="fg-files modal-input" type="text" placeholder="index.html, sw.js" value="' + files.replace(/"/g,'&quot;') + '" style="font-size:13px;padding:6px 10px;font-family:\'Courier New\',monospace">';
+  container.appendChild(row);
+}
+
+function addFileGroup() { appendFileGroup(); }
+
+function openEdit(id) {
+  const item = data.items.find(a => a.id === id);
+  if (!item) return;
+  document.getElementById('editId').value = id;
+  document.getElementById('editName').value = item.name || '';
+  document.getElementById('editType').value = item.type || 'APP';
+  document.getElementById('editTags').value = item.tags || '';
+  document.getElementById('editStatus').value = item.status || 'wip';
+  document.getElementById('editMergedInto').value = item.mergedInto || '';
+  document.getElementById('editPriority').value = item.priority || '';
+  toggleMergedField(item.status || 'wip');
+  document.getElementById('editUrl').value = item.url || '';
+  const container = document.getElementById('editFileGroups');
+  container.innerHTML = '';
+  const groups = item.fileGroups && item.fileGroups.length ? item.fileGroups : (item.files && item.files.length ? [{label:'ファイル', files:item.files}] : []);
+  groups.forEach(g => appendFileGroup(g.label, g.files.join(', ')));
+  document.getElementById('editSummary').value = item.currentWork ? item.currentWork.summary || '' : '';
+  document.getElementById('editSpec').value = item.currentWork ? item.currentWork.spec || '' : '';
+  document.getElementById('editTouching').value = item.currentWork ? (item.currentWork.touchingFiles || []).join(', ') : '';
+  document.getElementById('editModal').classList.add('open');
+}
+
+function closeEdit() { document.getElementById('editModal').classList.remove('open'); }
+
+function saveEdit() {
+  const id = document.getElementById('editId').value;
+  const item = data.items.find(a => a.id === id);
+  if (!item) return;
+  const dateStr = nowStr();
+  item.name        = document.getElementById('editName').value.trim() || item.name;
+  item.type        = document.getElementById('editType').value;
+  item.tags        = document.getElementById('editTags').value || null;
+  item.status      = document.getElementById('editStatus').value;
+  item.statusLabel = slabel(item.status);
+  item.mergedInto  = document.getElementById('editMergedInto').value.trim() || null;
+  item.priority    = document.getElementById('editPriority').value || null;
+  item.url         = document.getElementById('editUrl').value.trim();
+
+  const fgRows = document.getElementById('editFileGroups').querySelectorAll('.fg-row');
+  item.fileGroups = [];
+  fgRows.forEach(row => {
+    const label = row.querySelector('.fg-label').value.trim();
+    const filesRaw = row.querySelector('.fg-files').value.trim();
+    const files = filesRaw ? filesRaw.split(',').map(f => f.trim()).filter(Boolean) : [];
+    if (label || files.length) item.fileGroups.push({ label: label || 'ファイル', files });
+  });
+  item.files = [];
+
+  const summary  = document.getElementById('editSummary').value.trim();
+  const spec     = document.getElementById('editSpec').value.trim();
+  const touching = document.getElementById('editTouching').value.trim();
+  const touchingFiles = touching ? touching.split(',').map(f => f.trim()).filter(Boolean) : [];
+  item.currentWork = (summary || spec || touchingFiles.length)
+    ? { summary, spec: spec || null, touchingFiles } : null;
+
+  if (!item.logs) item.logs = [];
+  item.logs.push({ date: dateStr, note: '手動編集' });
+  item.lastTouched = dateStr;
+  data.lastUpdated = dateStr.slice(0,10);
+  addGlobalLog(item.name + ' 編集');
+  saveData(data); closeEdit(); render();
+  showToast('保存しました ✓');
+}
+
+document.getElementById('editModal').addEventListener('click', function(e) {
+  if (e.target === this) closeEdit();
+});
+document.getElementById('deleteModal').addEventListener('click', function(e) {
+  if (e.target === this) this.classList.remove('open');
+});
+document.getElementById('unknownModal').addEventListener('click', function(e) {
+  if (e.target === this) { this.classList.remove('open'); pendingJson = null; }
+});
+
+function toggleLogNote(el) {
+  const note = el.querySelector('.card-log-note');
+  if (note) note.classList.toggle('expanded');
+}
+
+function toggleCw(wrap) {
+  const cw = wrap.querySelector('.cw-collapsible');
+  const btn = wrap.nextElementSibling;
+  if (!cw) return;
+  const isExpanded = cw.classList.toggle('expanded');
+  if (btn && btn.classList.contains('cw-toggle-btn')) {
+    btn.textContent = isExpanded ? '▲' : '▼';
+  }
+}
+
+function initCwToggles() {
+  document.querySelectorAll('.cw-wrap').forEach(wrap => {
+    const cw = wrap.querySelector('.cw-collapsible');
+    if (!cw) return;
+    // すでにボタンがある場合はスキップ
+    if (wrap.nextElementSibling && wrap.nextElementSibling.classList.contains('cw-toggle-btn')) return;
+    // 実際にクランプされてるか判定
+    const isClamped = cw.scrollHeight > cw.clientHeight + 2;
+    if (isClamped) {
+      wrap.onclick = () => toggleCw(wrap);
+      const btn = document.createElement('div');
+      btn.className = 'cw-toggle-btn';
+      btn.textContent = '▼';
+      btn.onclick = (e) => { e.stopPropagation(); toggleCw(wrap); };
+      wrap.insertAdjacentElement('afterend', btn);
+    }
+  });
+}
+
+// ── トースト ──────────────────────────────────────────────────
+function confirmDelete(id) {
+  const item = data.items.find(a => a.id === id);
+  if (!item) return;
+  document.getElementById('deleteItemName').textContent = item.name;
+  document.getElementById('deleteModal').dataset.targetId = id;
+  document.getElementById('deleteModal').classList.add('open');
+}
+
+function doDelete() {
+  const id = document.getElementById('deleteModal').dataset.targetId;
+  const item = data.items.find(a => a.id === id);
+  if (!item) return;
+  const name = item.name;
+  data.items = data.items.filter(a => a.id !== id);
+  addGlobalLog(name + ' 削除');
+  data.lastUpdated = nowStr().slice(0,10);
+  saveData(data);
+  document.getElementById('deleteModal').classList.remove('open');
+  render();
+  showToast('「' + name + '」を削除しました');
+}
+
+function resetData() {
+  if (confirm('localStorageのデータを全てリセットして初期状態に戻します。よろしいですか？')) {
+    localStorage.removeItem('dev_dashboard_v2');
+    data = loadData();
+    activeTab = '__recent__';
+    render();
+    showToast('リセットしました');
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  setTimeout(() => { t.style.display = 'none'; }, 2000);
+}
+
+function setGateHours(h) {
+  setGateThresholdHours(h);
+  const el = document.getElementById('gateThresholdDisplay');
+  if (el) el.textContent = h;
+  showToast('しきい値を ' + h + '時間に変更したで ✓');
+}
+function updateGateThresholdDisplay() {
+  const el = document.getElementById('gateThresholdDisplay');
+  if (el) el.textContent = getGateThresholdHours();
+}
+function updateReqSelect() {}
+
+render();
+checkGateOnLoad();
+</script>
+</body>
+</html>
