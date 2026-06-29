@@ -1,0 +1,15 @@
+{
+  "name": "dev-dashboard",
+  "compatibility_date": "2026-06-29",
+  "main": "src/index.js",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "DEV_DASHBOARD_KV",
+      "id": "c8be4b9e09394191baf6a0d1139a55b6"
+    }
+  ]
+}
