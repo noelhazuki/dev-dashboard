@@ -1396,6 +1396,7 @@ function handleRestoreFile(inputEl) {
     }
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify(parsed));
+      syncSave(parsed); // 復元した内容をKVにも反映（これが無いとリロード時に古いKVデータで上書きされる）
       data = loadData();
       activeTab = '__recent__';
       render();
