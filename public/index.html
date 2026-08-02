@@ -571,6 +571,36 @@ textarea:focus { border-color: var(--cyan); }
 const STORE_KEY = 'dev_dashboard_v2';
 const GATE_KEY  = 'dev_dashboard_gate';
 
+// ── S24⇔Surface データ同期（Cloudflare KV） ──────────────────────
+const SYNC_API_BASE = 'https://dev-dashboard.noel-hazuki.workers.dev';
+const SYNC_TOKEN = 'eveeve5';
+
+function syncSave(d) {
+  fetch(SYNC_API_BASE + '/api/save', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + SYNC_TOKEN
+    },
+    body: JSON.stringify(d)
+  }).catch(function(e) { /* オフライン等は無視、ローカル保存は成功済み */ });
+}
+
+function syncLoad() {
+  fetch(SYNC_API_BASE + '/api/load', {
+    headers: { 'Authorization': 'Bearer ' + SYNC_TOKEN }
+  })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(remote) {
+      if (remote && Array.isArray(remote.items)) {
+        data = remote;
+        localStorage.setItem(STORE_KEY, JSON.stringify(remote));
+        render();
+      }
+    })
+    .catch(function(e) { /* オフライン等は無視、ローカルデータのまま表示継続 */ });
+}
+
 // ── 再開ゲート ────────────────────────────────────────────────
 function getGateThresholdHours() {
   try { const v = localStorage.getItem(GATE_KEY + '_threshold'); return v ? parseFloat(v) : 2; } catch(e) { return 2; }
@@ -739,9 +769,13 @@ function loadData() {
     return d;
   } catch(e) { return DEFAULT_DATA; }
 }
-function saveData(d) { try { localStorage.setItem(STORE_KEY, JSON.stringify(d)); recordActivity(); } catch(e) {} }
+function saveData(d) {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(d)); recordActivity(); } catch(e) {}
+  syncSave(d);
+}
 
 let data = loadData();
+syncLoad(); // 起動時に1回だけKVから読み込み（後勝ちで上書き）
 let activeTab = '__recent__';
 
 // ── ユーティリティ ────────────────────────────────────────────
