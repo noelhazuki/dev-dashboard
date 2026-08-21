@@ -68,7 +68,7 @@ function applyEntry(dataObj, json) {
     return;
   }
 
-  // 未登録appは自動登録しない
+  // 未登録appは自動で登録しない
   const item = findItem(dataObj.items, json.app);
   if (!item) {
     const err = new Error("unknown_app");
