@@ -1,7 +1,7 @@
 // src/index.js
 const KV_KEY = "dev_dashboard_v2";
 
-// 種類（type）の定義
+// 種類（type）定義
 const TYPE_DEF = { APP: true, RES: true, DCK: true, ADM: true };
 
 // 緊急度（アイゼンハワー・マトリクス）の定義
